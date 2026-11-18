@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.13';
+  const BUILD_VERSION='2.0.0-alpha.14';
   const KEY='toolbox-v2-state', LEGACY='zeta-tool-pocket-bookmarklets-v1';
   const INSTANCE='__ZETA_TOOLBOX_V2__';
   if (window[INSTANCE]) {
@@ -133,44 +133,92 @@
       });
     }
   }
+  function restorePin(item){
+    const el=tracked.get(item.id);
+    if(el){el.style.removeProperty('display');el.removeAttribute('data-toolbox-pinned');tracked.delete(item.id)}
+    for(const root of roots()){try{root.querySelectorAll(item.selector).forEach(node=>{
+      if(node.getAttribute('data-toolbox-pinned')===item.id){node.style.removeProperty('display');node.removeAttribute('data-toolbox-pinned')}
+    })}catch{}}
+  }
+  function runExternal(item){
+    let target=tracked.get(item.id);
+    if(!target?.isConnected){
+      for(const root of roots()){try{target=root.querySelector(item.selector);if(target)break}catch{}}
+    }
+    if(!target){alert('외부 도구 연결이 끊겼습니다. 도구가 실행 중인지 확인해주세요.');return}
+    // Click the actual control, not an inert host container.
+    const root=target.shadowRoot||target;
+    const control=target.matches?.('button,[role="button"],a,input[type="button"]')?target:
+      root.querySelector?.('button,[role="button"],a,input[type="button"]');
+    const press=control||target;
+    try{
+      press.click();
+    }catch(error){alert('도구 실행 실패: '+error.message)}
+  }
+  function moveTool(item,direction){
+    const group=state.items.filter(x=>(x.category||'기본')===(item.category||'기본'));
+    const idx=group.indexOf(item),other=group[idx+direction];if(!other)return;
+    const a=state.items.indexOf(item),b=state.items.indexOf(other);
+    [state.items[a],state.items[b]]=[state.items[b],state.items[a]];save();render();
+  }
+  function editTool(item){
+    shadow.querySelector('.manager')?.remove();
+    const wrap=document.createElement('div');wrap.className='manager';
+    wrap.innerHTML='<div class="manager-card"><div class="manager-title">도구 편집 <button class="manager-close">×</button></div><label>이름<input class="edit-name" maxlength="80"></label><div class="manager-two"><label>아이콘<input class="edit-icon" maxlength="12"></label><label>카테고리<input class="edit-category" maxlength="32" list="toolbox-category-options"></label></div><datalist id="toolbox-category-options"></datalist><div class="manager-actions"><button class="edit-cancel">취소</button><button class="edit-save">저장</button></div></div>';
+    wrap.querySelector('.edit-name').value=item.name||'';
+    wrap.querySelector('.edit-icon').value=item.icon||'🧩';
+    wrap.querySelector('.edit-category').value=item.category||'기본';
+    const dl=wrap.querySelector('datalist');
+    [...new Set(['기본','편집','꾸미기','관리','기타',...state.items.map(x=>x.category).filter(Boolean)])].forEach(cat=>{const o=document.createElement('option');o.value=cat;dl.append(o)});
+    const close=()=>wrap.remove();
+    wrap.querySelector('.manager-close').onclick=close;
+    wrap.querySelector('.edit-cancel').onclick=close;
+    wrap.querySelector('.edit-save').onclick=()=>{
+      const name=wrap.querySelector('.edit-name').value.trim();
+      if(!name)return alert('이름을 입력해주세요.');
+      item.name=name;item.icon=wrap.querySelector('.edit-icon').value.trim()||'🧩';
+      item.category=wrap.querySelector('.edit-category').value.trim()||'기본';
+      save();close();render();
+    };
+    panel.append(wrap);
+  }
   function render(){
     status.textContent=(state.locked?'수납 잠금':'수납 활성')+' · '+BUILD_VERSION;
     button.classList.toggle('locked',state.locked);
     list.replaceChildren();
     const add=(label,action,kind,item=null)=>{
       const row=document.createElement('div');row.className='item';
-      const run=document.createElement('button');run.className='run';const glyph=document.createElement('span');glyph.className='tool-icon';glyph.textContent=item?.icon|| (kind==='SCRIPT'?'🧩':kind==='BM'?'🔖':kind==='설치'?'📥':kind==='코드'?'📝':'＋');const name=document.createElement('span');name.className='tool-name';name.textContent=label;run.append(glyph,name);run.addEventListener('click',action);
-      row.append(run);list.append(row);return row;
+      const run=document.createElement('button');run.className='run';
+      const glyph=document.createElement('span');glyph.className='tool-icon';glyph.textContent=item?.icon|| (kind==='SCRIPT'?'🧩':kind==='BM'?'🔖':kind==='설치'?'📥':kind==='코드'?'📝':'＋');
+      const name=document.createElement('span');name.className='tool-name';name.textContent=label;
+      run.append(glyph,name);run.addEventListener('click',action);row.append(run);list.append(row);return row;
     };
-    const sortedItems=[...state.items].sort((a,b)=>String(a.category||'기본').localeCompare(String(b.category||'기본'),'ko'));
-    let lastCategory='';
-    sortedItems.forEach(item=>{
-      const category=String(item.category||'기본');
-      if(category!==lastCategory){const heading=document.createElement('div');heading.className='category-heading';heading.textContent=category;list.append(heading);lastCategory=category;}
-      const row=add(item.name,()=>{
-        if(item.type==='url'){openInstall(item.url)}else if(item.type==='code'){showCode(item)}else if(item.type==='bookmarklet'){
-          try{const code=item.code.replace(/^javascript:/i,'');(0,eval)(code)}catch(e){alert('북마클릿 실행 실패: '+e.message)}
-        }else{
-          let target=tracked.get(item.id);
-          if(!target?.isConnected){
-            for(const root of roots()){try{target=root.querySelector(item.selector);if(target)break}catch{}}
-          }
-          if(target){target.click()}else{alert('도구 버튼을 찾을 수 없습니다. 유저스크립트가 실행 중인지 확인해주세요.')}
+    const groups=[...new Set(state.items.map(x=>x.category||'기본'))];
+    for(const category of groups){
+      const heading=document.createElement('div');heading.className='category-heading';heading.textContent=category;list.append(heading);
+      for(const item of state.items.filter(x=>(x.category||'기본')===category)){
+        const row=add(item.name,()=>{
+          if(item.type==='url')openInstall(item.url);
+          else if(item.type==='code')showCode(item);
+          else if(item.type==='bookmarklet'){try{(0,eval)(item.code.replace(/^javascript:/i,''))}catch(e){alert('북마클릿 실행 실패: '+e.message)}}
+          else runExternal(item);
+        },item.type==='script'?'SCRIPT':item.type==='url'?'설치':item.type==='code'?'코드':'BM',item);
+        const controls=document.createElement('div');controls.className='tool-actions';
+        for(const [label,fn] of [['✎',()=>editTool(item)],['↑',()=>moveTool(item,-1)],['↓',()=>moveTool(item,1)],['×',()=>{
+          if(item.type==='script')restorePin(item);
+          state.items=state.items.filter(x=>x.id!==item.id);save();render();
+        }]]){
+          const b=document.createElement('button');b.textContent=label;b.title=label==='✎'?'편집':label==='×'?'수납 해제':'순서 이동';b.onclick=fn;controls.append(b);
         }
-      },item.type==='script'?'SCRIPT':item.type==='url'?'설치':item.type==='code'?'코드':'BM',item);
-      const remove=document.createElement('button');remove.className='remove';remove.textContent='×';remove.title='수납 해제';
-      remove.addEventListener('click',()=>{
-        if(item.type==='script'){for(const root of roots()){try{root.querySelectorAll(item.selector).forEach(el=>{el.style.removeProperty('display');el.removeAttribute('data-toolbox-pinned')})}catch{}}}
-        state.items=state.items.filter(x=>x.id!==item.id);save();render();
-      });row.append(remove);
-    });
+        row.append(controls);
+      }
+    }
     if(!state.items.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='아직 담긴 도구가 없습니다';list.append(empty)}
     if(!state.locked&&!RECOVERY_MODE){
       collect();
       for(const [selector,c] of candidates){
-        if(isSelfItem({type:'script',name:c.label,selector}))continue;
-        if(state.items.some(x=>x.selector===selector))continue;
-        const row=add(c.label,()=>{state.items.push({id:'script-'+Date.now(),type:'script',name:c.label,selector,safeCapture:true});save();applyPinned();render()},'추가 +');
+        if(isSelfItem({type:'script',name:c.label,selector})||state.items.some(x=>x.selector===selector))continue;
+        const row=add(c.label,()=>{state.items.push({id:'script-'+Date.now(),type:'script',name:c.label,selector,safeCapture:true,icon:'🧩',category:'기본'});save();applyPinned();render()},'추가 +');
         row.classList.add('candidate');
       }
     }
@@ -242,7 +290,7 @@
       .panel.open{display:flex;flex-direction:column}
       .head{display:flex;align-items:center;gap:10px;padding:16px 14px 13px;background:#f4f8f0;border-bottom:1px solid #e2eadf}
       .brand{font-size:16px;font-weight:800;letter-spacing:-.4px}.build{font-size:9px;font-weight:700;color:#91a48c;letter-spacing:0}.status{font-size:10px;color:#8b9e86;margin-top:3px}
-      .close,.remove{border:0;background:transparent;color:#799274;cursor:pointer;font-size:20px}
+      .tool-actions{position:absolute;top:0;right:0;display:flex;gap:1px;background:#f4f8f0ed;border-radius:8px;z-index:2}.tool-actions button{border:0;background:transparent;color:#597154;font-size:12px;padding:2px;min-width:16px;cursor:pointer}.item{padding-top:18px} .close,.remove{border:0;background:transparent;color:#799274;cursor:pointer;font-size:20px}
       .close{margin-left:auto;width:30px;height:30px;border-radius:10px;background:#e7efe2}
       .tools{flex:1;min-height:0;overflow:auto;padding:15px 12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:10px 8px;overscroll-behavior:contain}
       .category-heading{grid-column:1/-1;font-size:11px;font-weight:800;color:#82987a;letter-spacing:.02em;padding:5px 3px 0;border-bottom:1px solid #e5ede1;padding-bottom:7px}.item{position:relative;min-width:0}
