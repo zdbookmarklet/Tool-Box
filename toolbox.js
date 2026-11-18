@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.12';
+  const BUILD_VERSION='2.0.0-alpha.13';
   const KEY='toolbox-v2-state', LEGACY='zeta-tool-pocket-bookmarklets-v1';
   const INSTANCE='__ZETA_TOOLBOX_V2__';
   if (window[INSTANCE]) {
@@ -72,7 +72,7 @@
   }
   // Tool-pocket 1.x compatibility: known Zeta launchers and stable host metadata.
   const KNOWN_TOOLS='#zeta-screen-fit-control,#zeta-persona-editor-host,#zpc-userscript-launcher,#zeta-chat-summary-float-button,#zeta-visible-join-button,#zk-memory-fab,#zeta-shell-api-export-button,#zk_memo_dock,#zk-chat-games-root,[data-zeta-review-tabbar-drag="true"],[data-inpocket],[data-zeta-pocket-shadow-tools],[id^="zk-"],[id*="zetakit"],[id*="inpocket"],[id*="launcher"],[id*="toolbar"],[id*="tool-bar"],[id*="tabbar"],[id*="dock"],[class*="inpocket"],[class*="toolbar"],[class*="tool-bar"],[class*="tabbar"],[class*="dock"]';
-  const normalizeName=v=>String(v||'').replace(/\\s+/g,' ').trim().slice(0,40);
+  const normalizeName=v=>String(v||'').replace(/\s+/g,' ').trim().slice(0,40);
   const genericName=/^(중단|정지|닫기|열기|메뉴|햄버거|토글|실행|설정|on|off|start|stop|close|open|menu|toggle|button|fab)$/i;
   function toolName(node,button){
     const root=node.shadowRoot;
@@ -92,6 +92,18 @@
     }
     return '외부 도구';
   }
+  function stableSelector(el){
+    const direct=selectorFor(el);
+    if(direct)return direct;
+    for(const attr of ['data-name','data-label','aria-label','title']){
+      const v=el.getAttribute?.(attr);
+      if(v&&v.length<70){
+        const selector=el.tagName.toLowerCase()+'['+attr+'="'+CSS.escape(v)+'"]';
+        try{if(roots().reduce((n,r)=>n+r.querySelectorAll(selector).length,0)===1)return selector}catch{}
+      }
+    }
+    return '';
+  }
   function floatingTool(el){
     if(!(el instanceof Element)||el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host'))return null;
     const chain=[];let n=el;
@@ -102,7 +114,7 @@
       if(r.width<15||r.height<15||r.width>240||r.height>240)continue;
       if(!['fixed','absolute','sticky'].includes(p))continue;
       if(node.closest?.('header,nav,[role="navigation"]')&&!node.matches(KNOWN_TOOLS))continue;
-      const selector=selectorFor(node);
+      const selector=stableSelector(node)||stableSelector(el);
       if(!selector)continue;
       const label=toolName(node,el);
       if(isSelfItem({type:'script',name:label,selector}))return null;
@@ -114,7 +126,7 @@
     if(RECOVERY_MODE||state.locked)return;
     candidates.clear();
     for(const root of roots()){
-      root.querySelectorAll(KNOWN_TOOLS+',button,[role="button"],[class*="float"],[class*="Float"],[class*="fab"],[class*="Fab"]').forEach(el=>{
+      root.querySelectorAll(KNOWN_TOOLS+',button,[role="button"],[class*="float"],[class*="Float"],[class*="fab"],[class*="Fab"],[style*="fixed"],[style*="absolute"]').forEach(el=>{
         if(el.hasAttribute('data-toolbox-pinned'))return;
         const tool=floatingTool(el);
         if(tool&&!state.items.some(x=>x.type==='script'&&x.selector===tool.selector))candidates.set(tool.selector,tool);
@@ -244,7 +256,7 @@
       .bottom{padding:10px 12px 14px;border-top:1px solid #e5ede1;display:flex;flex-wrap:wrap;gap:6px;background:#f8faf6}
       .bottom button{flex:1;white-space:nowrap;border:1px solid #d7e5d0;border-radius:11px;background:#edf5e8;color:#5b7d4d;padding:9px 5px;cursor:pointer;font-size:11px;font-weight:700}
       .manager{position:absolute;inset:0;background:#172d1a55;display:flex;align-items:center;justify-content:center;padding:12px;z-index:3}.manager-card{background:white;border-radius:14px;width:100%;max-height:100%;overflow:auto;padding:15px;box-shadow:0 8px 30px #182e1b30}.manager-title{font-weight:750;font-size:15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.manager-close{border:0;background:transparent;font-size:21px;color:#82947a}.manager-card label{display:block;font-size:12px;color:#587052;margin:10px 0}.manager-card input,.manager-card select,.manager-card textarea{display:block;width:100%;border:1px solid #d5e5ce;border-radius:8px;padding:9px;margin-top:5px;background:#fff;color:#334b35;font-size:12px}.manager-card textarea{resize:vertical;min-height:75px}.manager-help{font-size:11px;line-height:1.5;color:#778a70}.manager-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}.manager-actions button{border:1px solid #d5e5ce;background:#eaf4e5;border-radius:8px;padding:8px 12px;color:#527b43}.grip{position:absolute;right:5px;bottom:5px;width:22px;height:22px;cursor:nwse-resize;touch-action:none;opacity:.55;background:repeating-linear-gradient(135deg,transparent 0 5px,#94ad89 5px 6px,transparent 6px 9px);clip-path:polygon(100% 0,100% 100%,0 100%)}
-    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox <span class="build">v${BUILD_VERSION}</span></div><div class="status"></div></div><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">수납 모드 전환</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
+    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox <span class="build">v${BUILD_VERSION}</span></div><div class="status"></div></div><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">수납 모드 전환</button><button class="pick">+ 화면에서 선택</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
     button=shadow.querySelector('.launcher');button.title='Toolbox '+BUILD_VERSION;panel=shadow.querySelector('.panel');list=shadow.querySelector('.tools');status=shadow.querySelector('.status');grip=shadow.querySelector('.grip');
     // Never trust a persisted position without checking the current viewport.
     if(state.position&&Number.isFinite(Number(state.position.x))&&Number.isFinite(Number(state.position.y))){
@@ -262,6 +274,46 @@
     shadow.querySelector('.toggle').onclick=toggle;
     shadow.querySelector('.addscript').onclick=()=>openManager('script');
     shadow.querySelector('.addbm').onclick=()=>openManager('bookmarklet');
+    // Fallback for launchers that cannot be discovered by heuristic scans.
+    let pickMode=false;
+    const pickButton=shadow.querySelector('.pick');
+    const setPick=on=>{
+      pickMode=on;
+      pickButton.textContent=on?'선택 취소':'+ 화면에서 선택';
+      status.textContent=on?'화면에서 외부 도구 버튼을 터치하세요':(state.locked?'수납 잠금':'수납 활성')+' · '+BUILD_VERSION;
+      if(on)panel.classList.remove('open');
+    };
+    pickButton.onclick=()=>setPick(!pickMode);
+    document.addEventListener('pointerdown',e=>{
+      if(!pickMode)return;
+      const path=e.composedPath();
+      if(path.includes(host)||path.some(n=>n instanceof Element&&n.id==='toolbox-v2-host'))return;
+      const target=path.find(n=>n instanceof Element&&n!==document.documentElement&&n!==document.body);
+      if(!target)return;
+      e.preventDefault();e.stopImmediatePropagation();
+      const tool=floatingTool(target)||(()=>{
+        let n=target;
+        for(let i=0;n&&i<8;i++,n=n.parentElement||n.getRootNode?.()?.host){
+          const rect=n.getBoundingClientRect();
+          if(rect.width<15||rect.height<15||rect.width>260||rect.height>260)continue;
+          const selector=stableSelector(n);
+          if(selector)return {el:n,selector,label:toolName(n,target)};
+        }
+        return null;
+      })();
+      if(!tool){alert('이 버튼은 고유 식별자가 없어 안전하게 수납할 수 없습니다.');setPick(false);return}
+      if(!state.items.some(x=>x.type==='script'&&x.selector===tool.selector)){
+        state.items.push({id:'script-'+Date.now(),type:'script',name:tool.label,selector:tool.selector,safeCapture:true,icon:'🧩',category:'기본'});
+        save();applyPinned();
+      }
+      setPick(false);panel.classList.add('open');render();
+    },true);
+    document.addEventListener('click',e=>{
+      if(!pickMode)return;
+      if(e.composedPath().includes(host))return;
+      e.preventDefault();e.stopImmediatePropagation();
+    },true);
+
     let drag=null,skipClick=false;
     button.addEventListener('pointerdown',e=>{
       if(e.button!==0)return;pressed=false;skipClick=false;
