@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.10';
+  const BUILD_VERSION='2.0.0-alpha.11';
   const KEY='toolbox-v2-state', LEGACY='zeta-tool-pocket-bookmarklets-v1';
   const INSTANCE='__ZETA_TOOLBOX_V2__';
   if (window[INSTANCE]) {
@@ -30,7 +30,7 @@
   const candidates=new Map();
   const tracked=new Map();
   let collecting=false,observer=null,host,shadow,button,panel,list,status,grip,pressTimer,pressed=false;
-  const icon='<svg viewBox="0 0 48 48" width="31" height="31" fill="none" aria-hidden="true"><rect x="7" y="18" width="34" height="24" rx="5" fill="currentColor" opacity=".82"/><path d="M5 15c0-2 2-4 4-4h30c2 0 4 2 4 4v7H5z" fill="currentColor"/><path d="M24 11v31M9 27h30" stroke="white" stroke-width="3" opacity=".9"/><path d="M23 12C11 13 11 3 17 4c4 0 6 5 7 8Zm2 0C37 13 37 3 31 4c-4 0-6 5-7 8Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg>';
+  const icon='<svg viewBox="0 0 48 48" width="22" height="22" fill="none" aria-hidden="true"><rect x="7" y="18" width="34" height="24" rx="5" fill="currentColor" opacity=".82"/><path d="M5 15c0-2 2-4 4-4h30c2 0 4 2 4 4v7H5z" fill="currentColor"/><path d="M24 11v31M9 27h30" stroke="white" stroke-width="3" opacity=".9"/><path d="M23 12C11 13 11 3 17 4c4 0 6 5 7 8Zm2 0C37 13 37 3 31 4c-4 0-6 5-7 8Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg>';
   function roots(root=document){
     const out=[]; const walk=node=>{
       if(node===shadow||node?.host?.id==='toolbox-v2-host')return;
@@ -63,26 +63,37 @@
       const val=el.getAttribute(attr);if(val&&val.length<90)return el.tagName.toLowerCase()+'['+attr+'="'+CSS.escape(val)+'"]';
     }
     // Only allow selectors that uniquely identify one external element.
-    const cls=[...el.classList].filter(c=>/^[a-zA-Z][\\w-]{2,}$/.test(c)&&!/^css-|^sc-|^hover:|^focus:/.test(c));
+    const cls=[...el.classList].filter(c=>/^[a-zA-Z][\w-]{2,}$/.test(c)&&!/^css-|^sc-|^hover:|^focus:/.test(c));
     for(const c of cls){
       const selector=el.tagName.toLowerCase()+'.'+esc(c);
       try{if(roots().reduce((n,r)=>n+r.querySelectorAll(selector).length,0)===1)return selector}catch{}
     }
     return '';
   }
+  function floatingTool(el){
+    if(!el||el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host'))return null;
+    let node=el;
+    for(let i=0;node&&i<5;i++,node=node.parentElement){
+      if(node.id==='toolbox-v2-host')return null;
+      const r=node.getBoundingClientRect(),p=getComputedStyle(node).position;
+      if(r.width>=18&&r.height>=18&&r.width<=180&&r.height<=180&&['fixed','absolute','sticky'].includes(p)){
+        const label=(el.getAttribute?.('aria-label')||el.title||el.textContent||node.getAttribute('aria-label')||node.title||node.id||'외부 도구').trim().slice(0,40);
+        const selector=selectorFor(node)||selectorFor(el);
+        if(!selector||isSelfItem({type:'script',name:label,selector}))return null;
+        return {el:node,selector,label};
+      }
+    }
+    return null;
+  }
   function collect(){
     if(RECOVERY_MODE)return;
     if(state.locked)return;
     candidates.clear();
     for(const root of roots()){
-      root.querySelectorAll('button,[role="button"],[id*="launcher"],[class*="fab"]').forEach(el=>{
-        if(el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host')||el.hasAttribute('data-toolbox-pinned'))return;
-        const style=getComputedStyle(el),r=el.getBoundingClientRect();
-        if(r.width<15||r.height<15||r.width>160||r.height>160)return;
-        if(!['fixed','absolute','sticky'].includes(style.position)&&!['fixed','absolute','sticky'].includes(getComputedStyle(el.parentElement||el).position))return;
-        const selector=selectorFor(el);if(!selector||isSelfItem({type:'script',name:el.getAttribute('aria-label')||el.title||'',selector}))return;
-        const label=(el.getAttribute('aria-label')||el.title||el.textContent||el.id||'외부 도구').trim().slice(0,40);
-        candidates.set(selector,{el,label,selector});
+      root.querySelectorAll('button,[role="button"],[id*="launcher"],[class*="fab"],[class*="float"],[class*="Float"]').forEach(el=>{
+        if(el.hasAttribute('data-toolbox-pinned'))return;
+        const tool=floatingTool(el);
+        if(tool)candidates.set(tool.selector,tool);
       });
     }
   }
@@ -189,7 +200,7 @@
     shadow.innerHTML=`<style>
       :host{all:initial;font-family:system-ui,-apple-system,sans-serif;color:#354735;z-index:2147483000;position:fixed;inset:0;pointer-events:none}
       *{box-sizing:border-box}button,input{font:inherit}
-      .launcher{position:fixed;left:calc(100vw - 64px);top:50vh;width:48px;height:48px;display:grid;place-items:center;border:1px solid #b7cdaa;border-radius:15px;background:#e4f1da;color:#719a5c;box-shadow:0 5px 18px #35473530;pointer-events:auto;touch-action:none;cursor:grab}
+      .launcher{position:fixed;left:calc(100vw - 64px);top:50vh;width:42px;height:42px;display:grid;place-items:center;border:1px solid #b7cdaa;border-radius:15px;background:#e4f1da;color:#719a5c;box-shadow:0 5px 18px #35473530;pointer-events:auto;touch-action:none;cursor:grab}
       .launcher.locked{background:#ebebeb;color:#929292;border-color:#d1d1d1}
       .panel{position:fixed;display:none;width:320px;height:410px;min-width:260px;min-height:230px;max-width:95vw;max-height:85vh;background:rgba(247,250,245,.97);border:1px solid #d9e5d4;border-radius:25px;box-shadow:0 18px 50px #203a2c38;pointer-events:auto;overflow:hidden;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
       .panel.open{display:flex;flex-direction:column}
@@ -213,8 +224,8 @@
     button=shadow.querySelector('.launcher');button.title='Toolbox '+BUILD_VERSION;panel=shadow.querySelector('.panel');list=shadow.querySelector('.tools');status=shadow.querySelector('.status');grip=shadow.querySelector('.grip');
     // Never trust a persisted position without checking the current viewport.
     if(state.position&&Number.isFinite(Number(state.position.x))&&Number.isFinite(Number(state.position.y))){
-      const x=clamp(Number(state.position.x),4,Math.max(4,innerWidth-52));
-      const y=clamp(Number(state.position.y),4,Math.max(4,innerHeight-52));
+      const x=clamp(Number(state.position.x),4,Math.max(4,innerWidth-46));
+      const y=clamp(Number(state.position.y),4,Math.max(4,innerHeight-46));
       button.style.left=x+'px';button.style.top=y+'px';
       if(x!==state.position.x||y!==state.position.y){state.position={x,y};save()}
     }else{state.position=null;save()}
@@ -246,23 +257,20 @@
     // Drag a floating external tool onto the launcher to collect it.
     // Capture the gesture without interfering with the tool's own pointer handlers.
     let incoming=null;
-    const externalTarget=node=>{
-      const el=node?.closest?.('button,[role="button"],[id*="launcher"],[class*="fab"]');
-      if(!el||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host'))return null;
-      const selector=selectorFor(el);
-      if(!selector||isSelfItem({type:'script',name:el.getAttribute('aria-label')||el.title||'',selector}))return null;
-      const r=el.getBoundingClientRect();
-      if(r.width<15||r.height<15||r.width>160||r.height>160)return null;
-      const p=getComputedStyle(el).position,pp=getComputedStyle(el.parentElement||el).position;
-      if(!['fixed','absolute','sticky'].includes(p)&&!['fixed','absolute','sticky'].includes(pp))return null;
-      return {el,selector,label:(el.getAttribute('aria-label')||el.title||el.textContent||el.id||'외부 도구').trim().slice(0,40)};
+    const externalTarget=(event)=>{
+      for(const node of event.composedPath()){
+        if(!(node instanceof Element))continue;
+        const tool=floatingTool(node);
+        if(tool)return tool;
+      }
+      return null;
     };
     document.addEventListener('pointerdown',e=>{
       if(state.locked||e.button!==0)return;
-      const tool=externalTarget(e.target);
+      const tool=externalTarget(e);
       incoming=tool?{...tool,id:e.pointerId,x:e.clientX,y:e.clientY}:null;
     },true);
-    document.addEventListener('pointerup',e=>{
+    const finishIncoming=e=>{
       if(!incoming||incoming.id!==e.pointerId)return;
       const c=incoming;incoming=null;
       if(state.locked||Math.hypot(e.clientX-c.x,e.clientY-c.y)<18)return;
@@ -274,7 +282,9 @@
       if(state.items.some(item=>item.type==='script'&&item.selector===c.selector))return;
       state.items.push({id:'script-'+Date.now(),type:'script',name:c.label,selector:c.selector,safeCapture:true,icon:'🧩',category:'기본'});
       save();applyPinned();render();
-    },true);
+    };
+    document.addEventListener('pointerup',finishIncoming,true);
+    window.addEventListener('pointerup',finishIncoming,true);
     document.addEventListener('pointercancel',()=>{incoming=null},true);
     let resize=null;
     grip.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();resize={id:e.pointerId,x:e.clientX,y:e.clientY,w:panel.offsetWidth,h:panel.offsetHeight};grip.setPointerCapture(e.pointerId)});
