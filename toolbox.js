@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.14';
+  const BUILD_VERSION='2.0.0-alpha.15';
   const KEY='toolbox-v2-state', LEGACY='zeta-tool-pocket-bookmarklets-v1';
   const INSTANCE='__ZETA_TOOLBOX_V2__';
   if (window[INSTANCE]) {
@@ -182,10 +182,13 @@
     };
     panel.append(wrap);
   }
+  let editMode=false;
   function render(){
-    status.textContent=(state.locked?'수납 잠금':'수납 활성')+' · '+BUILD_VERSION;
+    status.textContent=state.locked?'수납 잠금':'수납 활성';
     button.classList.toggle('locked',state.locked);
     list.replaceChildren();
+    shadow.querySelector('.context-menu')?.remove();
+    const editBtn=shadow.querySelector('.editmode');if(editBtn)editBtn.textContent=editMode?'완료':'편집';
     const add=(label,action,kind,item=null)=>{
       const row=document.createElement('div');row.className='item';
       const run=document.createElement('button');run.className='run';
@@ -203,14 +206,47 @@
           else if(item.type==='bookmarklet'){try{(0,eval)(item.code.replace(/^javascript:/i,''))}catch(e){alert('북마클릿 실행 실패: '+e.message)}}
           else runExternal(item);
         },item.type==='script'?'SCRIPT':item.type==='url'?'설치':item.type==='code'?'코드':'BM',item);
-        const controls=document.createElement('div');controls.className='tool-actions';
-        for(const [label,fn] of [['✎',()=>editTool(item)],['↑',()=>moveTool(item,-1)],['↓',()=>moveTool(item,1)],['×',()=>{
-          if(item.type==='script')restorePin(item);
-          state.items=state.items.filter(x=>x.id!==item.id);save();render();
-        }]]){
-          const b=document.createElement('button');b.textContent=label;b.title=label==='✎'?'편집':label==='×'?'수납 해제':'순서 이동';b.onclick=fn;controls.append(b);
-        }
-        row.append(controls);
+        row.dataset.toolId=item.id;
+        row.draggable=false;
+        const showMenu=()=>{
+          shadow.querySelector('.context-menu')?.remove();
+          const menu=document.createElement('div');menu.className='context-menu';
+          const actions=[['✎  편집',()=>editTool(item)],['↑  앞으로 이동',()=>moveTool(item,-1)],['↓  뒤로 이동',()=>moveTool(item,1)],['×  수납 해제',()=>{
+            if(item.type==='script')restorePin(item);
+            state.items=state.items.filter(x=>x.id!==item.id);save();render();
+          }]];
+          for(const [label,fn] of actions){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{menu.remove();fn()};menu.append(b)}
+          const rect=row.getBoundingClientRect(),pr=panel.getBoundingClientRect();
+          menu.style.left=Math.max(6,Math.min(rect.left-pr.left,pr.width-155))+'px';
+          menu.style.top=Math.max(6,Math.min(rect.bottom-pr.top+3,pr.height-174))+'px';
+          panel.append(menu);
+        };
+        let holdTimer=0,gesture=null,suppress=false;
+        row.addEventListener('pointerdown',e=>{
+          if(e.button!==0)return;
+          gesture={x:e.clientX,y:e.clientY,active:false,id:e.pointerId};
+          holdTimer=setTimeout(()=>{if(!gesture)return;gesture.active=true;suppress=true;row.classList.add('dragging');showMenu()},480);
+        });
+        row.addEventListener('pointermove',e=>{
+          if(!gesture||e.pointerId!==gesture.id)return;
+          const dist=Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y);
+          if(dist>9&&!gesture.active){clearTimeout(holdTimer);gesture=null;return}
+          if(gesture.active&&dist>16){
+            shadow.querySelector('.context-menu')?.remove();
+            const target=shadow.elementFromPoint(e.clientX,e.clientY)?.closest?.('.item[data-tool-id]');
+            if(target&&target!==row){
+              const a=state.items.findIndex(x=>x.id===item.id),b=state.items.findIndex(x=>x.id===target.dataset.toolId);
+              if(a>=0&&b>=0&&a!==b){const moved=state.items.splice(a,1)[0];moved.category=state.items[b]?.category||moved.category;state.items.splice(b,0,moved);save();render()}
+              gesture=null;
+            }
+          }
+        });
+        const endHold=()=>{clearTimeout(holdTimer);row.classList.remove('dragging');gesture=null};
+        row.addEventListener('pointerup',endHold);row.addEventListener('pointercancel',endHold);
+        run.addEventListener('click',e=>{if(suppress){e.stopImmediatePropagation();suppress=false}},true);
+        row.addEventListener('contextmenu',e=>{e.preventDefault();showMenu()});
+        if(editMode){row.classList.add('editing');run.addEventListener('click',e=>{e.stopImmediatePropagation();showMenu()},true)}
+
       }
     }
     if(!state.items.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='아직 담긴 도구가 없습니다';list.append(empty)}
@@ -289,8 +325,8 @@
       .panel{position:fixed;display:none;width:320px;height:410px;min-width:260px;min-height:230px;max-width:95vw;max-height:85vh;background:rgba(247,250,245,.97);border:1px solid #d9e5d4;border-radius:25px;box-shadow:0 18px 50px #203a2c38;pointer-events:auto;overflow:hidden;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
       .panel.open{display:flex;flex-direction:column}
       .head{display:flex;align-items:center;gap:10px;padding:16px 14px 13px;background:#f4f8f0;border-bottom:1px solid #e2eadf}
-      .brand{font-size:16px;font-weight:800;letter-spacing:-.4px}.build{font-size:9px;font-weight:700;color:#91a48c;letter-spacing:0}.status{font-size:10px;color:#8b9e86;margin-top:3px}
-      .tool-actions{position:absolute;top:0;right:0;display:flex;gap:1px;background:#f4f8f0ed;border-radius:8px;z-index:2}.tool-actions button{border:0;background:transparent;color:#597154;font-size:12px;padding:2px;min-width:16px;cursor:pointer}.item{padding-top:18px} .close,.remove{border:0;background:transparent;color:#799274;cursor:pointer;font-size:20px}
+      .brand{font-size:16px;font-weight:800;letter-spacing:-.4px}.head>div:first-child{min-width:0;flex:1}.editmode{border:0;background:#e6efe0;border-radius:9px;padding:7px 9px;color:#57724e;font-size:11px;font-weight:700;cursor:pointer}.item.dragging{opacity:.5}.item.editing .run{outline:2px solid #9bb993}.context-menu{position:absolute;z-index:6;min-width:145px;background:#fff;border:1px solid #d8e5d1;border-radius:14px;box-shadow:0 8px 25px #0002;padding:5px;display:flex;flex-direction:column}.context-menu button{border:0;background:transparent;color:#40543e;text-align:left;padding:10px;border-radius:8px;font-size:12px}.context-menu button:active{background:#edf5e9}.build{font-size:9px;font-weight:700;color:#91a48c;letter-spacing:0}.status{font-size:10px;color:#8b9e86;margin-top:3px}
+      .tool-actions{display:none}.close,.remove{border:0;background:transparent;color:#799274;cursor:pointer;font-size:20px}
       .close{margin-left:auto;width:30px;height:30px;border-radius:10px;background:#e7efe2}
       .tools{flex:1;min-height:0;overflow:auto;padding:15px 12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:10px 8px;overscroll-behavior:contain}
       .category-heading{grid-column:1/-1;font-size:11px;font-weight:800;color:#82987a;letter-spacing:.02em;padding:5px 3px 0;border-bottom:1px solid #e5ede1;padding-bottom:7px}.item{position:relative;min-width:0}
@@ -304,7 +340,8 @@
       .bottom{padding:10px 12px 14px;border-top:1px solid #e5ede1;display:flex;flex-wrap:wrap;gap:6px;background:#f8faf6}
       .bottom button{flex:1;white-space:nowrap;border:1px solid #d7e5d0;border-radius:11px;background:#edf5e8;color:#5b7d4d;padding:9px 5px;cursor:pointer;font-size:11px;font-weight:700}
       .manager{position:absolute;inset:0;background:#172d1a55;display:flex;align-items:center;justify-content:center;padding:12px;z-index:3}.manager-card{background:white;border-radius:14px;width:100%;max-height:100%;overflow:auto;padding:15px;box-shadow:0 8px 30px #182e1b30}.manager-title{font-weight:750;font-size:15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.manager-close{border:0;background:transparent;font-size:21px;color:#82947a}.manager-card label{display:block;font-size:12px;color:#587052;margin:10px 0}.manager-card input,.manager-card select,.manager-card textarea{display:block;width:100%;border:1px solid #d5e5ce;border-radius:8px;padding:9px;margin-top:5px;background:#fff;color:#334b35;font-size:12px}.manager-card textarea{resize:vertical;min-height:75px}.manager-help{font-size:11px;line-height:1.5;color:#778a70}.manager-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}.manager-actions button{border:1px solid #d5e5ce;background:#eaf4e5;border-radius:8px;padding:8px 12px;color:#527b43}.grip{position:absolute;right:5px;bottom:5px;width:22px;height:22px;cursor:nwse-resize;touch-action:none;opacity:.55;background:repeating-linear-gradient(135deg,transparent 0 5px,#94ad89 5px 6px,transparent 6px 9px);clip-path:polygon(100% 0,100% 100%,0 100%)}
-    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox <span class="build">v${BUILD_VERSION}</span></div><div class="status"></div></div><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">수납 모드 전환</button><button class="pick">+ 화면에서 선택</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
+    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox</div><div class="status"></div></div><button class="editmode" aria-label="편집 모드">편집</button><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">수납 모드 전환</button><button class="pick">+ 화면에서 선택</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
+    shadow.querySelector('.status').title=BUILD_VERSION;
     button=shadow.querySelector('.launcher');button.title='Toolbox '+BUILD_VERSION;panel=shadow.querySelector('.panel');list=shadow.querySelector('.tools');status=shadow.querySelector('.status');grip=shadow.querySelector('.grip');
     // Never trust a persisted position without checking the current viewport.
     if(state.position&&Number.isFinite(Number(state.position.x))&&Number.isFinite(Number(state.position.y))){
@@ -318,6 +355,7 @@
     panel.style.width=state.size.w+'px';panel.style.height=state.size.h+'px';
     const open=()=>{const r=button.getBoundingClientRect();panel.style.left=clamp(r.left-state.size.w,8,Math.max(8,innerWidth-state.size.w-8))+'px';panel.style.top=clamp(r.top,8,Math.max(8,innerHeight-state.size.h-8))+'px';panel.classList.add('open');render()};
     shadow.querySelector('.close').onclick=()=>panel.classList.remove('open');
+    shadow.querySelector('.editmode').onclick=()=>{editMode=!editMode;render()};
     const toggle=()=>{state.locked=!state.locked;save();render()};
     shadow.querySelector('.toggle').onclick=toggle;
     shadow.querySelector('.addscript').onclick=()=>openManager('script');
