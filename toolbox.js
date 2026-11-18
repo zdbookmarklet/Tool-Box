@@ -4,16 +4,27 @@
   const INSTANCE='__ZETA_TOOLBOX_V2__';
   if (window[INSTANCE]) return;
   const state=(()=>{try{return {...{locked:true,items:[],position:null,size:{w:320,h:410}},...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{return {locked:true,items:[],position:null,size:{w:320,h:410}}}})();
+  // Recover from older builds that accidentally pinned Toolbox itself.
+  const isSelfItem=item=>item?.type==='script'&&(
+    /toolbox|tool-pocket|zeta-all-loader|toolbox-v2-host/i.test(String(item.name||''))||
+    /toolbox|tool-pocket|toolbox-v2-host/i.test(String(item.selector||''))||
+    String(item.selector||'').trim()==='button.launcher'
+  );
+  const beforeCount=state.items.length;
+  state.items=state.items.filter(item=>!isSelfItem(item));
   const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}};
   const clamp=(v,a,b)=>Math.max(a,Math.min(v,b));
   const esc=s=>CSS.escape(s);
+  if(state.items.length!==beforeCount)save();
   const candidates=new Map();
   const tracked=new Map();
   let collecting=false,observer=null,host,shadow,button,panel,list,status,grip,pressTimer,pressed=false;
   const icon='<svg viewBox="0 0 48 48" width="31" height="31" fill="none" aria-hidden="true"><rect x="7" y="18" width="34" height="24" rx="5" fill="currentColor" opacity=".82"/><path d="M5 15c0-2 2-4 4-4h30c2 0 4 2 4 4v7H5z" fill="currentColor"/><path d="M24 11v31M9 27h30" stroke="white" stroke-width="3" opacity=".9"/><path d="M23 12C11 13 11 3 17 4c4 0 6 5 7 8Zm2 0C37 13 37 3 31 4c-4 0-6 5-7 8Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg>';
   function roots(root=document){
-    const out=[root]; const walk=node=>{
-      node.querySelectorAll?.('*').forEach(el=>{if(el.shadowRoot){out.push(el.shadowRoot);walk(el.shadowRoot)}});
+    const out=[]; const walk=node=>{
+      if(node===shadow||node?.host?.id==='toolbox-v2-host')return;
+      out.push(node);
+      node.querySelectorAll?.('*').forEach(el=>{if(el.id==='toolbox-v2-host')return;if(el.shadowRoot){walk(el.shadowRoot)}});
     };walk(root);return out;
   }
   function matchesItem(el,item){
@@ -25,7 +36,7 @@
       let found=false;
       for(const root of roots()){
         try{root.querySelectorAll(item.selector).forEach(el=>{
-          if(el.closest?.('#toolbox-v2-host'))return;
+          if(el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host'))return;
           el.setAttribute('data-toolbox-pinned',item.id);
           el.style.setProperty('display','none','important');
           tracked.set(item.id,el);found=true;
@@ -48,7 +59,7 @@
     candidates.clear();
     for(const root of roots()){
       root.querySelectorAll('button,[role="button"],[id*="launcher"],[class*="fab"]').forEach(el=>{
-        if(el.closest?.('#toolbox-v2-host')||el.hasAttribute('data-toolbox-pinned'))return;
+        if(el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host')||el.hasAttribute('data-toolbox-pinned'))return;
         const style=getComputedStyle(el),r=el.getBoundingClientRect();
         if(r.width<15||r.height<15||r.width>160||r.height>160)return;
         if(style.position!=='fixed'&&style.position!=='absolute')return;
@@ -90,6 +101,7 @@
     if(!state.locked){
       collect();
       for(const [selector,c] of candidates){
+        if(isSelfItem({type:'script',name:c.label,selector}))continue;
         if(state.items.some(x=>x.selector===selector))continue;
         const row=add(c.label,()=>{state.items.push({id:'script-'+Date.now(),type:'script',name:c.label,selector});save();applyPinned();render()},'추가 +');
         row.classList.add('candidate');
