@@ -16,6 +16,12 @@
   const clamp=(v,a,b)=>Math.max(a,Math.min(v,b));
   const esc=s=>CSS.escape(s);
   if(state.items.length!==beforeCount)save();
+  // Recovery mode: keep saved registrations, but suspend all automatic hiding.
+  // Older selector-based pins could match unrelated launchers or the Toolbox itself.
+  const RECOVERY_MODE=true;
+  state.locked=true;
+  state.position=null;
+  save();
   const candidates=new Map();
   const tracked=new Map();
   let collecting=false,observer=null,host,shadow,button,panel,list,status,grip,pressTimer,pressed=false;
@@ -32,6 +38,7 @@
     try{return el.matches(item.selector)}catch{return false}
   }
   function applyPinned(){
+    if(RECOVERY_MODE)return;
     for(const item of state.items.filter(x=>x.type==='script'&&x.selector)){
       let found=false;
       for(const root of roots()){
@@ -55,6 +62,7 @@
     return '';
   }
   function collect(){
+    if(RECOVERY_MODE)return;
     if(state.locked)return;
     candidates.clear();
     for(const root of roots()){
@@ -70,7 +78,7 @@
     }
   }
   function render(){
-    status.textContent=state.locked?'수납 잠금':'수납 활성';
+    status.textContent=RECOVERY_MODE?'복구 모드 · 자동 수납 중단':(state.locked?'수납 잠금':'수납 활성');
     button.classList.toggle('locked',state.locked);
     list.replaceChildren();
     const add=(label,action,kind)=>{
@@ -98,7 +106,7 @@
       });row.append(remove);
     });
     if(!state.items.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='등록된 도구가 없습니다';list.append(empty)}
-    if(!state.locked){
+    if(!state.locked&&!RECOVERY_MODE){
       collect();
       for(const [selector,c] of candidates){
         if(isSelfItem({type:'script',name:c.label,selector}))continue;
@@ -182,7 +190,7 @@
     panel.style.width=state.size.w+'px';panel.style.height=state.size.h+'px';
     const open=()=>{const r=button.getBoundingClientRect();panel.style.left=clamp(r.left-320,8,innerWidth-state.size.w-8)+'px';panel.style.top=clamp(r.top,8,innerHeight-state.size.h-8)+'px';panel.classList.add('open');render()};
     shadow.querySelector('.close').onclick=()=>panel.classList.remove('open');
-    const toggle=()=>{state.locked=!state.locked;save();render()};
+    const toggle=()=>{if(RECOVERY_MODE){alert('복구 모드에서는 자동 수납이 일시 중단되어 있습니다.');return}state.locked=!state.locked;save();render()};
     shadow.querySelector('.toggle').onclick=toggle;
     shadow.querySelector('.addscript').onclick=openManager;
     shadow.querySelector('.addbm').onclick=()=>{
@@ -218,6 +226,11 @@
     });
     observer.observe(document.documentElement,{childList:true,subtree:true});
     addEventListener('resize',()=>{const r=button.getBoundingClientRect();const x=clamp(r.left,4,Math.max(4,innerWidth-52)),y=clamp(r.top,4,Math.max(4,innerHeight-52));button.style.left=x+'px';button.style.top=y+'px';state.position={x,y};save()},{passive:true});
+    // Undo stale inline hiding left by older Toolbox versions.
+    for(const el of document.querySelectorAll('[data-toolbox-pinned]')){
+      el.style.removeProperty('display');
+      el.removeAttribute('data-toolbox-pinned');
+    }
     applyPinned();render();
   }
   window[INSTANCE]={destroy(){observer?.disconnect();host?.remove();delete window[INSTANCE]},rescan(){applyPinned();render()}};
