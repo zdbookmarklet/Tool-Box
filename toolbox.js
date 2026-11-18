@@ -170,7 +170,15 @@
       .manager{position:absolute;inset:0;background:#172d1a55;display:flex;align-items:center;justify-content:center;padding:12px;z-index:3}.manager-card{background:white;border-radius:14px;width:100%;max-height:100%;overflow:auto;padding:15px;box-shadow:0 8px 30px #182e1b30}.manager-title{font-weight:750;font-size:15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.manager-close{border:0;background:transparent;font-size:21px;color:#82947a}.manager-card label{display:block;font-size:12px;color:#587052;margin:10px 0}.manager-card input,.manager-card select,.manager-card textarea{display:block;width:100%;border:1px solid #d5e5ce;border-radius:8px;padding:9px;margin-top:5px;background:#fff;color:#334b35;font-size:12px}.manager-card textarea{resize:vertical;min-height:75px}.manager-help{font-size:11px;line-height:1.5;color:#778a70}.manager-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}.manager-actions button{border:1px solid #d5e5ce;background:#eaf4e5;border-radius:8px;padding:8px 12px;color:#527b43}.grip{position:absolute;right:5px;bottom:5px;width:22px;height:22px;cursor:nwse-resize;touch-action:none;opacity:.55;background:repeating-linear-gradient(135deg,transparent 0 5px,#94ad89 5px 6px,transparent 6px 9px);clip-path:polygon(100% 0,100% 100%,0 100%)}
     </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox</div><div class="status"></div></div><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">수납 모드 전환</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
     button=shadow.querySelector('.launcher');panel=shadow.querySelector('.panel');list=shadow.querySelector('.tools');status=shadow.querySelector('.status');grip=shadow.querySelector('.grip');
-    if(state.position){button.style.left=state.position.x+'px';button.style.top=state.position.y+'px'}
+    // Never trust a persisted position without checking the current viewport.
+    if(state.position&&Number.isFinite(Number(state.position.x))&&Number.isFinite(Number(state.position.y))){
+      const x=clamp(Number(state.position.x),4,Math.max(4,innerWidth-52));
+      const y=clamp(Number(state.position.y),4,Math.max(4,innerHeight-52));
+      button.style.left=x+'px';button.style.top=y+'px';
+      if(x!==state.position.x||y!==state.position.y){state.position={x,y};save()}
+    }else{state.position=null;save()}
+    button.style.setProperty('display','grid','important');
+    button.style.setProperty('visibility','visible','important');
     panel.style.width=state.size.w+'px';panel.style.height=state.size.h+'px';
     const open=()=>{const r=button.getBoundingClientRect();panel.style.left=clamp(r.left-320,8,innerWidth-state.size.w-8)+'px';panel.style.top=clamp(r.top,8,innerHeight-state.size.h-8)+'px';panel.classList.add('open');render()};
     shadow.querySelector('.close').onclick=()=>panel.classList.remove('open');
@@ -209,6 +217,7 @@
       scheduled=true;requestAnimationFrame(()=>{scheduled=false;applyPinned();if(!state.locked&&panel.classList.contains('open'))render()});
     });
     observer.observe(document.documentElement,{childList:true,subtree:true});
+    addEventListener('resize',()=>{const r=button.getBoundingClientRect();const x=clamp(r.left,4,Math.max(4,innerWidth-52)),y=clamp(r.top,4,Math.max(4,innerHeight-52));button.style.left=x+'px';button.style.top=y+'px';state.position={x,y};save()},{passive:true});
     applyPinned();render();
   }
   window[INSTANCE]={destroy(){observer?.disconnect();host?.remove();delete window[INSTANCE]},rescan(){applyPinned();render()}};
