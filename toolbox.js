@@ -1,8 +1,14 @@
 (() => {
   'use strict';
+  const BUILD_VERSION='2.0.0-alpha.8';
   const KEY='toolbox-v2-state', LEGACY='zeta-tool-pocket-bookmarklets-v1';
   const INSTANCE='__ZETA_TOOLBOX_V2__';
-  if (window[INSTANCE]) return;
+  if (window[INSTANCE]) {
+    if(window[INSTANCE].version===BUILD_VERSION&&document.getElementById('toolbox-v2-host'))return;
+    try{window[INSTANCE].destroy?.()}catch(error){console.warn('[Toolbox] old instance cleanup',error)}
+    document.getElementById('toolbox-v2-host')?.remove();
+    try{delete window[INSTANCE]}catch{}
+  }
   const state=(()=>{try{return {...{locked:true,items:[],position:null,size:{w:320,h:410}},...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{return {locked:true,items:[],position:null,size:{w:320,h:410}}}})();
   // Recover from older builds that accidentally pinned Toolbox itself.
   const isSelfItem=item=>item?.type==='script'&&(
@@ -187,7 +193,7 @@
       .panel{position:fixed;display:none;width:320px;height:410px;min-width:260px;min-height:230px;max-width:95vw;max-height:85vh;background:rgba(247,250,245,.97);border:1px solid #d9e5d4;border-radius:25px;box-shadow:0 18px 50px #203a2c38;pointer-events:auto;overflow:hidden;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
       .panel.open{display:flex;flex-direction:column}
       .head{display:flex;align-items:center;gap:10px;padding:16px 14px 13px;background:#f4f8f0;border-bottom:1px solid #e2eadf}
-      .brand{font-size:16px;font-weight:800;letter-spacing:-.4px}.status{font-size:10px;color:#8b9e86;margin-top:3px}
+      .brand{font-size:16px;font-weight:800;letter-spacing:-.4px}.build{font-size:9px;font-weight:700;color:#91a48c;letter-spacing:0}.status{font-size:10px;color:#8b9e86;margin-top:3px}
       .close,.remove{border:0;background:transparent;color:#799274;cursor:pointer;font-size:20px}
       .close{margin-left:auto;width:30px;height:30px;border-radius:10px;background:#e7efe2}
       .tools{flex:1;min-height:0;overflow:auto;padding:15px 12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:10px 8px;overscroll-behavior:contain}
@@ -202,7 +208,7 @@
       .bottom{padding:10px 12px 14px;border-top:1px solid #e5ede1;display:flex;flex-wrap:wrap;gap:6px;background:#f8faf6}
       .bottom button{flex:1;white-space:nowrap;border:1px solid #d7e5d0;border-radius:11px;background:#edf5e8;color:#5b7d4d;padding:9px 5px;cursor:pointer;font-size:11px;font-weight:700}
       .manager{position:absolute;inset:0;background:#172d1a55;display:flex;align-items:center;justify-content:center;padding:12px;z-index:3}.manager-card{background:white;border-radius:14px;width:100%;max-height:100%;overflow:auto;padding:15px;box-shadow:0 8px 30px #182e1b30}.manager-title{font-weight:750;font-size:15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.manager-close{border:0;background:transparent;font-size:21px;color:#82947a}.manager-card label{display:block;font-size:12px;color:#587052;margin:10px 0}.manager-card input,.manager-card select,.manager-card textarea{display:block;width:100%;border:1px solid #d5e5ce;border-radius:8px;padding:9px;margin-top:5px;background:#fff;color:#334b35;font-size:12px}.manager-card textarea{resize:vertical;min-height:75px}.manager-help{font-size:11px;line-height:1.5;color:#778a70}.manager-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}.manager-actions button{border:1px solid #d5e5ce;background:#eaf4e5;border-radius:8px;padding:8px 12px;color:#527b43}.grip{position:absolute;right:5px;bottom:5px;width:22px;height:22px;cursor:nwse-resize;touch-action:none;opacity:.55;background:repeating-linear-gradient(135deg,transparent 0 5px,#94ad89 5px 6px,transparent 6px 9px);clip-path:polygon(100% 0,100% 100%,0 100%)}
-    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox</div><div class="status"></div></div><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">수납 모드 전환</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
+    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox <span class="build">v${BUILD_VERSION}</span></div><div class="status"></div></div><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">수납 모드 전환</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
     button=shadow.querySelector('.launcher');panel=shadow.querySelector('.panel');list=shadow.querySelector('.tools');status=shadow.querySelector('.status');grip=shadow.querySelector('.grip');
     // Never trust a persisted position without checking the current viewport.
     if(state.position&&Number.isFinite(Number(state.position.x))&&Number.isFinite(Number(state.position.y))){
@@ -288,6 +294,6 @@
     }
     applyPinned();render();
   }
-  window[INSTANCE]={destroy(){observer?.disconnect();host?.remove();delete window[INSTANCE]},rescan(){applyPinned();render()}};
+  window[INSTANCE]={version:BUILD_VERSION,destroy(){observer?.disconnect();host?.remove();delete window[INSTANCE]},rescan(){applyPinned();render()}};
   if(document.body)init();else addEventListener('DOMContentLoaded',init,{once:true});
 })();
