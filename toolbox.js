@@ -70,7 +70,7 @@
     };
     state.items.forEach(item=>{
       const row=add(item.name,()=>{
-        if(item.type==='bookmarklet'){
+        if(item.type==='url'){openInstall(item.url)}else if(item.type==='code'){showCode(item)}else if(item.type==='bookmarklet'){
           try{const code=item.code.replace(/^javascript:/i,'');(0,eval)(code)}catch(e){alert('북마클릿 실행 실패: '+e.message)}
         }else{
           let target=tracked.get(item.id);
@@ -79,7 +79,7 @@
           }
           if(target){target.click()}else{alert('도구 버튼을 찾을 수 없습니다. 유저스크립트가 실행 중인지 확인해주세요.')}
         }
-      },item.type==='script'?'SCRIPT':'BM');
+      },item.type==='script'?'SCRIPT':item.type==='url'?'설치':item.type==='code'?'코드':'BM');
       const remove=document.createElement('button');remove.className='remove';remove.textContent='×';remove.title='수납 해제';
       remove.addEventListener('click',()=>{
         if(item.type==='script'){for(const root of roots()){try{root.querySelectorAll(item.selector).forEach(el=>{el.style.removeProperty('display');el.removeAttribute('data-toolbox-pinned')})}catch{}}}
@@ -95,6 +95,45 @@
         row.classList.add('candidate');
       }
     }
+  }
+  function addManagedTool(type,name,value){
+    name=name.trim();value=value.trim();
+    if(!name||!value)return alert('이름과 내용을 입력해주세요.');
+    if(type==='url'){
+      let url;try{url=new URL(value)}catch{return alert('올바른 URL을 입력해주세요.')}
+      if(url.protocol!=='https:')return alert('HTTPS 주소만 등록할 수 있습니다.');
+      value=url.href;
+    }
+    state.items.push({id:'managed-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),type,name,...(type==='url'?{url:value}:{code:value})});
+    save();render();return true;
+  }
+  function openManager(){
+    const old=shadow.querySelector('.manager');if(old){old.remove();return}
+    const wrap=document.createElement('div');wrap.className='manager';
+    wrap.innerHTML=`<div class="manager-card"><div class="manager-title">유저스크립트 추가 <button class="manager-close" aria-label="닫기">×</button></div><label>등록 방식<select class="manager-type"><option value="url">설치 URL 연결</option><option value="code">코드 보관</option></select></label><label>이름<input class="manager-name" placeholder="예: Text Flip" maxlength="80"></label><label class="manager-value-label">HTTPS .user.js 주소<textarea class="manager-value" rows="4" placeholder="https://example.com/tool.user.js"></textarea></label><p class="manager-help">설치 URL은 Tampermonkey 설치 페이지를 여는 방식입니다. 코드 보관은 자동 실행되지 않으며 GM_* 권한도 제공하지 않습니다.</p><div class="manager-actions"><button class="manager-cancel">취소</button><button class="manager-save">등록</button></div></div>`;
+    panel.append(wrap);
+    const type=wrap.querySelector('.manager-type'),name=wrap.querySelector('.manager-name'),value=wrap.querySelector('.manager-value');
+    type.onchange=()=>{wrap.querySelector('.manager-value-label').firstChild.textContent=type.value==='url'?'HTTPS .user.js 주소':'유저스크립트 코드';value.placeholder=type.value==='url'?'https://example.com/tool.user.js':'// ==UserScript==\\n// ...'};
+    const close=()=>wrap.remove();
+    wrap.querySelector('.manager-close').onclick=close;wrap.querySelector('.manager-cancel').onclick=close;
+    wrap.querySelector('.manager-save').onclick=()=>{if(addManagedTool(type.value,name.value,value.value))close()};
+  }
+  function openInstall(url){
+    // Browsers/userscript managers decide whether an installation prompt appears.
+    const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';
+    shadow.append(a);a.click();a.remove();
+  }
+  function showCode(item){
+    const wrap=document.createElement('div');wrap.className='manager';
+    const card=document.createElement('div');card.className='manager-card';
+    const title=document.createElement('div');title.className='manager-title';title.textContent=item.name;
+    const close=document.createElement('button');close.textContent='×';close.className='manager-close';close.onclick=()=>wrap.remove();title.append(close);
+    const code=document.createElement('textarea');code.className='manager-value';code.rows=9;code.value=item.code;
+    const hint=document.createElement('p');hint.className='manager-help';hint.textContent='보관된 코드입니다. 자동 실행되지 않습니다. Tampermonkey 편집기에 복사해 설치하세요.';
+    const actions=document.createElement('div');actions.className='manager-actions';
+    const copy=document.createElement('button');copy.textContent='코드 복사';copy.onclick=()=>{navigator.clipboard?.writeText(code.value).then(()=>{copy.textContent='복사됨'}).catch(()=>{code.select();document.execCommand('copy')})};
+    const saveBtn=document.createElement('button');saveBtn.textContent='수정 저장';saveBtn.onclick=()=>{item.code=code.value;save();wrap.remove()};
+    actions.append(copy,saveBtn);card.append(title,code,hint,actions);wrap.append(card);panel.append(wrap);
   }
   function init(){
     host=document.createElement('div');host.id='toolbox-v2-host';document.body.append(host);
@@ -116,8 +155,8 @@
       .candidate{background:#f8fbf5}.empty{text-align:center;color:#8b9a86;padding:25px 0;font-size:13px}
       .bottom{padding:10px 14px;border-top:1px solid #edf1ea;display:flex;gap:8px}
       .bottom button{border:1px solid #d8e7d1;border-radius:9px;background:#f4f9ef;color:#5b7d4d;padding:8px;cursor:pointer;font-size:12px}
-      .grip{position:absolute;right:5px;bottom:5px;width:22px;height:22px;cursor:nwse-resize;touch-action:none;opacity:.55;background:repeating-linear-gradient(135deg,transparent 0 5px,#94ad89 5px 6px,transparent 6px 9px);clip-path:polygon(100% 0,100% 100%,0 100%)}
-    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox</div><div class="status"></div></div><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addbm">+ 북마클릿</button><button class="toggle">수납 모드 전환</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
+      .manager{position:absolute;inset:0;background:#172d1a55;display:flex;align-items:center;justify-content:center;padding:12px;z-index:3}.manager-card{background:white;border-radius:14px;width:100%;max-height:100%;overflow:auto;padding:15px;box-shadow:0 8px 30px #182e1b30}.manager-title{font-weight:750;font-size:15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.manager-close{border:0;background:transparent;font-size:21px;color:#82947a}.manager-card label{display:block;font-size:12px;color:#587052;margin:10px 0}.manager-card input,.manager-card select,.manager-card textarea{display:block;width:100%;border:1px solid #d5e5ce;border-radius:8px;padding:9px;margin-top:5px;background:#fff;color:#334b35;font-size:12px}.manager-card textarea{resize:vertical;min-height:75px}.manager-help{font-size:11px;line-height:1.5;color:#778a70}.manager-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}.manager-actions button{border:1px solid #d5e5ce;background:#eaf4e5;border-radius:8px;padding:8px 12px;color:#527b43}.grip{position:absolute;right:5px;bottom:5px;width:22px;height:22px;cursor:nwse-resize;touch-action:none;opacity:.55;background:repeating-linear-gradient(135deg,transparent 0 5px,#94ad89 5px 6px,transparent 6px 9px);clip-path:polygon(100% 0,100% 100%,0 100%)}
+    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox</div><div class="status"></div></div><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">수납 모드 전환</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
     button=shadow.querySelector('.launcher');panel=shadow.querySelector('.panel');list=shadow.querySelector('.tools');status=shadow.querySelector('.status');grip=shadow.querySelector('.grip');
     if(state.position){button.style.left=state.position.x+'px';button.style.top=state.position.y+'px'}
     panel.style.width=state.size.w+'px';panel.style.height=state.size.h+'px';
@@ -125,6 +164,7 @@
     shadow.querySelector('.close').onclick=()=>panel.classList.remove('open');
     const toggle=()=>{state.locked=!state.locked;save();render()};
     shadow.querySelector('.toggle').onclick=toggle;
+    shadow.querySelector('.addscript').onclick=openManager;
     shadow.querySelector('.addbm').onclick=()=>{
       const name=prompt('북마클릿 이름');if(!name)return;
       const code=prompt('javascript: 코드');if(!code)return;
