@@ -55,6 +55,12 @@
     for(const attr of ['data-testid']){
       const val=el.getAttribute(attr);if(val&&val.length<90)return el.tagName.toLowerCase()+'['+attr+'="'+CSS.escape(val)+'"]';
     }
+    // Only allow selectors that uniquely identify one external element.
+    const cls=[...el.classList].filter(c=>/^[a-zA-Z][\\w-]{2,}$/.test(c)&&!/^css-|^sc-|^hover:|^focus:/.test(c));
+    for(const c of cls){
+      const selector=el.tagName.toLowerCase()+'.'+esc(c);
+      try{if(roots().reduce((n,r)=>n+r.querySelectorAll(selector).length,0)===1)return selector}catch{}
+    }
     return '';
   }
   function collect(){
@@ -66,8 +72,8 @@
         if(el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host')||el.hasAttribute('data-toolbox-pinned'))return;
         const style=getComputedStyle(el),r=el.getBoundingClientRect();
         if(r.width<15||r.height<15||r.width>160||r.height>160)return;
-        if(style.position!=='fixed'&&style.position!=='absolute')return;
-        const selector=selectorFor(el);if(!selector)return;
+        if(!['fixed','absolute','sticky'].includes(style.position)&&!['fixed','absolute','sticky'].includes(getComputedStyle(el.parentElement||el).position))return;
+        const selector=selectorFor(el);if(!selector||isSelfItem({type:'script',name:el.getAttribute('aria-label')||el.title||'',selector}))return;
         const label=(el.getAttribute('aria-label')||el.title||el.textContent||el.id||'외부 도구').trim().slice(0,40);
         candidates.set(selector,{el,label,selector});
       });
@@ -186,9 +192,9 @@
       .close{margin-left:auto;width:30px;height:30px;border-radius:10px;background:#e7efe2}
       .tools{flex:1;min-height:0;overflow:auto;padding:15px 12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:10px 8px;overscroll-behavior:contain}
       .category-heading{grid-column:1/-1;font-size:11px;font-weight:800;color:#82987a;letter-spacing:.02em;padding:5px 3px 0;border-bottom:1px solid #e5ede1;padding-bottom:7px}.item{position:relative;min-width:0}
-      .run{width:100%;min-height:86px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1px solid #e0e9dc;border-radius:17px;background:#fff;color:#40543e;cursor:pointer;padding:10px 5px;box-shadow:0 2px 6px #3c5a3310}
+      .run{width:100%;min-height:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border:1px solid #e0e9dc;border-radius:17px;background:#fff;color:#40543e;cursor:pointer;padding:10px 5px;box-shadow:0 2px 6px #3c5a3310}
       .run:active{transform:scale(.97);background:#edf5e9}
-      .tool-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:13px;background:#e8f1e3;font-size:22px;line-height:1}
+      .tool-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:#e8f1e3;font-size:17px;line-height:1}
       .tool-name{width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:10px;font-weight:700}
       .remove{position:absolute;top:-5px;right:-4px;width:19px;height:19px;border-radius:50%;background:#d67b7b;color:#fff;font-size:15px;line-height:19px;box-shadow:0 1px 4px #0002}
       .candidate .run{border-style:dashed;background:#f4f9f0}.candidate .tool-icon{background:#deedda}
@@ -230,6 +236,39 @@
     const finish=e=>{if(!drag)return;clearTimeout(pressTimer);if(drag.moved){state.position={x:parseFloat(button.style.left),y:parseFloat(button.style.top)};save()}drag=null};
     button.addEventListener('pointerup',finish);button.addEventListener('pointercancel',finish);
     button.addEventListener('click',()=>{if(skipClick||pressed){skipClick=false;pressed=false;return}panel.classList.contains('open')?panel.classList.remove('open'):open()});
+    // Drag a floating external tool onto the launcher to collect it.
+    // Capture the gesture without interfering with the tool's own pointer handlers.
+    let incoming=null;
+    const externalTarget=node=>{
+      const el=node?.closest?.('button,[role="button"],[id*="launcher"],[class*="fab"]');
+      if(!el||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host'))return null;
+      const selector=selectorFor(el);
+      if(!selector||isSelfItem({type:'script',name:el.getAttribute('aria-label')||el.title||'',selector}))return null;
+      const r=el.getBoundingClientRect();
+      if(r.width<15||r.height<15||r.width>160||r.height>160)return null;
+      const p=getComputedStyle(el).position,pp=getComputedStyle(el.parentElement||el).position;
+      if(!['fixed','absolute','sticky'].includes(p)&&!['fixed','absolute','sticky'].includes(pp))return null;
+      return {el,selector,label:(el.getAttribute('aria-label')||el.title||el.textContent||el.id||'외부 도구').trim().slice(0,40)};
+    };
+    document.addEventListener('pointerdown',e=>{
+      if(state.locked||e.button!==0)return;
+      const tool=externalTarget(e.target);
+      incoming=tool?{...tool,id:e.pointerId,x:e.clientX,y:e.clientY}:null;
+    },true);
+    document.addEventListener('pointerup',e=>{
+      if(!incoming||incoming.id!==e.pointerId)return;
+      const c=incoming;incoming=null;
+      if(state.locked||Math.hypot(e.clientX-c.x,e.clientY-c.y)<18)return;
+      const r=button.getBoundingClientRect();
+      const inLauncher=e.clientX>=r.left-26&&e.clientX<=r.right+26&&e.clientY>=r.top-26&&e.clientY<=r.bottom+26;
+      const pr=panel.getBoundingClientRect();
+      const inPanel=panel.classList.contains('open')&&e.clientX>=pr.left&&e.clientX<=pr.right&&e.clientY>=pr.top&&e.clientY<=pr.bottom;
+      if(!inLauncher&&!inPanel)return;
+      if(state.items.some(item=>item.type==='script'&&item.selector===c.selector))return;
+      state.items.push({id:'script-'+Date.now(),type:'script',name:c.label,selector:c.selector,safeCapture:true,icon:'🧩',category:'기본'});
+      save();applyPinned();render();
+    },true);
+    document.addEventListener('pointercancel',()=>{incoming=null},true);
     let resize=null;
     grip.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();resize={id:e.pointerId,x:e.clientX,y:e.clientY,w:panel.offsetWidth,h:panel.offsetHeight};grip.setPointerCapture(e.pointerId)});
     grip.addEventListener('pointermove',e=>{if(!resize||e.pointerId!==resize.id)return;state.size.w=clamp(resize.w+e.clientX-resize.x,260,innerWidth-20);state.size.h=clamp(resize.h+e.clientY-resize.y,230,innerHeight-20);panel.style.width=state.size.w+'px';panel.style.height=state.size.h+'px'});
