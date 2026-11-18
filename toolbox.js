@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.15';
+  const BUILD_VERSION='2.0.0-alpha.16';
   const KEY='toolbox-v2-state', LEGACY='zeta-tool-pocket-bookmarklets-v1';
   const INSTANCE='__ZETA_TOOLBOX_V2__';
   if (window[INSTANCE]) {
@@ -207,6 +207,7 @@
           else runExternal(item);
         },item.type==='script'?'SCRIPT':item.type==='url'?'설치':item.type==='code'?'코드':'BM',item);
         row.dataset.toolId=item.id;
+        const run=row.querySelector('.run');
         row.draggable=false;
         const showMenu=()=>{
           shadow.querySelector('.context-menu')?.remove();
