@@ -77,12 +77,16 @@
     status.textContent=state.locked?'수납 잠금':'수납 활성';
     button.classList.toggle('locked',state.locked);
     list.replaceChildren();
-    const add=(label,action,kind)=>{
+    const add=(label,action,kind,item=null)=>{
       const row=document.createElement('div');row.className='item';
-      const run=document.createElement('button');run.className='run';const glyph=document.createElement('span');glyph.className='tool-icon';glyph.textContent=kind==='SCRIPT'?'🧩':kind==='BM'?'🔖':kind==='설치'?'📥':kind==='코드'?'📝':'＋';const name=document.createElement('span');name.className='tool-name';name.textContent=label;run.append(glyph,name);run.addEventListener('click',action);
+      const run=document.createElement('button');run.className='run';const glyph=document.createElement('span');glyph.className='tool-icon';glyph.textContent=item?.icon|| (kind==='SCRIPT'?'🧩':kind==='BM'?'🔖':kind==='설치'?'📥':kind==='코드'?'📝':'＋');const name=document.createElement('span');name.className='tool-name';name.textContent=label;run.append(glyph,name);run.addEventListener('click',action);
       row.append(run);list.append(row);return row;
     };
-    state.items.forEach(item=>{
+    const sortedItems=[...state.items].sort((a,b)=>String(a.category||'기본').localeCompare(String(b.category||'기본'),'ko'));
+    let lastCategory='';
+    sortedItems.forEach(item=>{
+      const category=String(item.category||'기본');
+      if(category!==lastCategory){const heading=document.createElement('div');heading.className='category-heading';heading.textContent=category;list.append(heading);lastCategory=category;}
       const row=add(item.name,()=>{
         if(item.type==='url'){openInstall(item.url)}else if(item.type==='code'){showCode(item)}else if(item.type==='bookmarklet'){
           try{const code=item.code.replace(/^javascript:/i,'');(0,eval)(code)}catch(e){alert('북마클릿 실행 실패: '+e.message)}
@@ -93,7 +97,7 @@
           }
           if(target){target.click()}else{alert('도구 버튼을 찾을 수 없습니다. 유저스크립트가 실행 중인지 확인해주세요.')}
         }
-      },item.type==='script'?'SCRIPT':item.type==='url'?'설치':item.type==='code'?'코드':'BM');
+      },item.type==='script'?'SCRIPT':item.type==='url'?'설치':item.type==='code'?'코드':'BM',item);
       const remove=document.createElement('button');remove.className='remove';remove.textContent='×';remove.title='수납 해제';
       remove.addEventListener('click',()=>{
         if(item.type==='script'){for(const root of roots()){try{root.querySelectorAll(item.selector).forEach(el=>{el.style.removeProperty('display');el.removeAttribute('data-toolbox-pinned')})}catch{}}}
@@ -111,7 +115,7 @@
       }
     }
   }
-  function addManagedTool(type,name,value){
+  function addManagedTool(type,name,value,icon='🧩',category='기본'){
     name=name.trim();value=value.trim();
     if(!name||!value)return alert('이름과 내용을 입력해주세요.');
     if(type==='url'){
@@ -119,19 +123,35 @@
       if(url.protocol!=='https:')return alert('HTTPS 주소만 등록할 수 있습니다.');
       value=url.href;
     }
-    state.items.push({id:'managed-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),type,name,...(type==='url'?{url:value}:{code:value})});
+    state.items.push({id:'managed-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),type,name,icon:icon.trim()||'🧩',category:category.trim()||'기본',...(type==='url'?{url:value}:{code:value})});
     save();render();return true;
   }
-  function openManager(){
-    const old=shadow.querySelector('.manager');if(old){old.remove();return}
+  function openManager(kind='script'){
+    const old=shadow.querySelector('.manager');if(old)old.remove();
+    const isBookmarklet=kind==='bookmarklet';
     const wrap=document.createElement('div');wrap.className='manager';
-    wrap.innerHTML=`<div class="manager-card"><div class="manager-title">유저스크립트 추가 <button class="manager-close" aria-label="닫기">×</button></div><label>등록 방식<select class="manager-type"><option value="url">설치 URL 연결</option><option value="code">코드 보관</option></select></label><label>이름<input class="manager-name" placeholder="예: Text Flip" maxlength="80"></label><label class="manager-value-label">HTTPS .user.js 주소<textarea class="manager-value" rows="4" placeholder="https://example.com/tool.user.js"></textarea></label><p class="manager-help">설치 URL은 Tampermonkey 설치 페이지를 여는 방식입니다. 코드 보관은 자동 실행되지 않으며 GM_* 권한도 제공하지 않습니다.</p><div class="manager-actions"><button class="manager-cancel">취소</button><button class="manager-save">등록</button></div></div>`;
+    wrap.innerHTML=`<div class="manager-card"><div class="manager-title">${isBookmarklet?'북마클릿':'유저스크립트'} 추가 <button class="manager-close" aria-label="닫기">×</button></div>
+    ${isBookmarklet?'':'<label>등록 방식<select class="manager-type"><option value="url">설치 URL 연결</option><option value="code">코드 보관</option></select></label>'}
+    <label>이름<input class="manager-name" placeholder="도구 이름" maxlength="80"></label>
+    <div class="manager-two"><label>아이콘<input class="manager-icon" placeholder="🔖" maxlength="12" value="${isBookmarklet?'🔖':'🧩'}"></label><label>카테고리<input class="manager-category" list="toolbox-category-options" placeholder="기본" maxlength="32" value="기본"></label></div>
+    <datalist id="toolbox-category-options"><option value="기본"><option value="편집"><option value="꾸미기"><option value="관리"><option value="기타"></datalist>
+    <label class="manager-value-label">${isBookmarklet?'북마클릿 코드':'HTTPS .user.js 주소'}<textarea class="manager-value" rows="5" placeholder="${isBookmarklet?'javascript:(()=>{...})()':'https://example.com/tool.user.js'}"></textarea></label>
+    <p class="manager-help">${isBookmarklet?'javascript:로 시작하는 북마클릿 코드를 등록합니다.':'설치 URL은 Tampermonkey 설치 페이지를 여는 방식입니다. 코드 보관은 자동 실행되지 않으며 GM_* 권한도 제공하지 않습니다.'}</p>
+    <div class="manager-actions"><button class="manager-cancel" type="button">취소</button><button class="manager-save" type="button">등록</button></div></div>`;
     panel.append(wrap);
     const type=wrap.querySelector('.manager-type'),name=wrap.querySelector('.manager-name'),value=wrap.querySelector('.manager-value');
-    type.onchange=()=>{wrap.querySelector('.manager-value-label').firstChild.textContent=type.value==='url'?'HTTPS .user.js 주소':'유저스크립트 코드';value.placeholder=type.value==='url'?'https://example.com/tool.user.js':'// ==UserScript==\\n// ...'};
+    if(type)type.onchange=()=>{wrap.querySelector('.manager-value-label').firstChild.textContent=type.value==='url'?'HTTPS .user.js 주소':'유저스크립트 코드';value.placeholder=type.value==='url'?'https://example.com/tool.user.js':'// ==UserScript==\\n// ...'};
     const close=()=>wrap.remove();
     wrap.querySelector('.manager-close').onclick=close;wrap.querySelector('.manager-cancel').onclick=close;
-    wrap.querySelector('.manager-save').onclick=()=>{if(addManagedTool(type.value,name.value,value.value))close()};
+    wrap.querySelector('.manager-save').onclick=()=>{
+      const icon=wrap.querySelector('.manager-icon').value.trim()||(isBookmarklet?'🔖':'🧩');
+      const category=wrap.querySelector('.manager-category').value.trim()||'기본';
+      if(isBookmarklet){
+        const code=value.value.trim();if(!name.value.trim()||!code)return alert('이름과 코드를 입력해주세요.');
+        if(!/^javascript:/i.test(code))return alert('javascript:로 시작하는 북마클릿 코드를 입력해주세요.');
+        state.items.push({id:'bm-'+Date.now(),type:'bookmarklet',name:name.value.trim(),code,icon,category});save();render();close();
+      }else if(addManagedTool(type.value,name.value,value.value,icon,category))close();
+    };
   }
   function openInstall(url){
     // Browsers/userscript managers decide whether an installation prompt appears.
@@ -165,7 +185,7 @@
       .close,.remove{border:0;background:transparent;color:#799274;cursor:pointer;font-size:20px}
       .close{margin-left:auto;width:30px;height:30px;border-radius:10px;background:#e7efe2}
       .tools{flex:1;min-height:0;overflow:auto;padding:15px 12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:10px 8px;overscroll-behavior:contain}
-      .item{position:relative;min-width:0}
+      .category-heading{grid-column:1/-1;font-size:11px;font-weight:800;color:#82987a;letter-spacing:.02em;padding:5px 3px 0;border-bottom:1px solid #e5ede1;padding-bottom:7px}.item{position:relative;min-width:0}
       .run{width:100%;min-height:86px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1px solid #e0e9dc;border-radius:17px;background:#fff;color:#40543e;cursor:pointer;padding:10px 5px;box-shadow:0 2px 6px #3c5a3310}
       .run:active{transform:scale(.97);background:#edf5e9}
       .tool-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:13px;background:#e8f1e3;font-size:22px;line-height:1}
@@ -192,12 +212,8 @@
     shadow.querySelector('.close').onclick=()=>panel.classList.remove('open');
     const toggle=()=>{state.locked=!state.locked;save();render()};
     shadow.querySelector('.toggle').onclick=toggle;
-    shadow.querySelector('.addscript').onclick=openManager;
-    shadow.querySelector('.addbm').onclick=()=>{
-      const name=prompt('북마클릿 이름');if(!name)return;
-      const code=prompt('javascript: 코드');if(!code)return;
-      state.items.push({id:'bm-'+Date.now(),type:'bookmarklet',name,code});save();render();
-    };
+    shadow.querySelector('.addscript').onclick=()=>openManager('script');
+    shadow.querySelector('.addbm').onclick=()=>openManager('bookmarklet');
     let drag=null,skipClick=false;
     button.addEventListener('pointerdown',e=>{
       if(e.button!==0)return;pressed=false;skipClick=false;
