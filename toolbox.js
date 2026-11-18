@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.11';
+  const BUILD_VERSION='2.0.0-alpha.12';
   const KEY='toolbox-v2-state', LEGACY='zeta-tool-pocket-bookmarklets-v1';
   const INSTANCE='__ZETA_TOOLBOX_V2__';
   if (window[INSTANCE]) {
@@ -30,7 +30,7 @@
   const candidates=new Map();
   const tracked=new Map();
   let collecting=false,observer=null,host,shadow,button,panel,list,status,grip,pressTimer,pressed=false;
-  const icon='<svg viewBox="0 0 48 48" width="22" height="22" fill="none" aria-hidden="true"><rect x="7" y="18" width="34" height="24" rx="5" fill="currentColor" opacity=".82"/><path d="M5 15c0-2 2-4 4-4h30c2 0 4 2 4 4v7H5z" fill="currentColor"/><path d="M24 11v31M9 27h30" stroke="white" stroke-width="3" opacity=".9"/><path d="M23 12C11 13 11 3 17 4c4 0 6 5 7 8Zm2 0C37 13 37 3 31 4c-4 0-6 5-7 8Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg>';
+  const icon='<svg viewBox="0 0 48 48" width="18" height="18" fill="none" aria-hidden="true"><rect x="7" y="18" width="34" height="24" rx="5" fill="currentColor" opacity=".82"/><path d="M5 15c0-2 2-4 4-4h30c2 0 4 2 4 4v7H5z" fill="currentColor"/><path d="M24 11v31M9 27h30" stroke="white" stroke-width="3" opacity=".9"/><path d="M23 12C11 13 11 3 17 4c4 0 6 5 7 8Zm2 0C37 13 37 3 31 4c-4 0-6 5-7 8Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg>';
   function roots(root=document){
     const out=[]; const walk=node=>{
       if(node===shadow||node?.host?.id==='toolbox-v2-host')return;
@@ -70,30 +70,54 @@
     }
     return '';
   }
+  // Tool-pocket 1.x compatibility: known Zeta launchers and stable host metadata.
+  const KNOWN_TOOLS='#zeta-screen-fit-control,#zeta-persona-editor-host,#zpc-userscript-launcher,#zeta-chat-summary-float-button,#zeta-visible-join-button,#zk-memory-fab,#zeta-shell-api-export-button,#zk_memo_dock,#zk-chat-games-root,[data-zeta-review-tabbar-drag="true"],[data-inpocket],[data-zeta-pocket-shadow-tools],[id^="zk-"],[id*="zetakit"],[id*="inpocket"],[id*="launcher"],[id*="toolbar"],[id*="tool-bar"],[id*="tabbar"],[id*="dock"],[class*="inpocket"],[class*="toolbar"],[class*="tool-bar"],[class*="tabbar"],[class*="dock"]';
+  const normalizeName=v=>String(v||'').replace(/\\s+/g,' ').trim().slice(0,40);
+  const genericName=/^(중단|정지|닫기|열기|메뉴|햄버거|토글|실행|설정|on|off|start|stop|close|open|menu|toggle|button|fab)$/i;
+  function toolName(node,button){
+    const root=node.shadowRoot;
+    const title=root?.querySelector('.brand,.title,.header-title,h1,h2,h3,[data-tool-name]')||
+      node.querySelector?.('.brand,.title,.header-title,h1,h2,h3,[data-tool-name]');
+    const candidates=[
+      node.getAttribute('data-tool-name'),node.getAttribute('data-name'),node.getAttribute('data-label'),
+      node.getAttribute('aria-label'),node.title,title?.getAttribute('data-tool-name'),title?.textContent,
+      node.id,button.getAttribute?.('data-tool-name'),button.getAttribute?.('data-name'),
+      button.getAttribute?.('aria-label'),button.title,button.textContent
+    ];
+    for(const raw of candidates){
+      let name=normalizeName(raw);
+      if(!name||genericName.test(name)||name.length>35)continue;
+      if(/^zeta-|^zk-|^zpc-/i.test(name))name=name.replace(/^zeta-|^zk-|^zpc-/i,'').replace(/[-_]/g,' ');
+      if(name&& !genericName.test(name))return name;
+    }
+    return '외부 도구';
+  }
   function floatingTool(el){
-    if(!el||el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host'))return null;
-    let node=el;
-    for(let i=0;node&&i<5;i++,node=node.parentElement){
+    if(!(el instanceof Element)||el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host'))return null;
+    const chain=[];let n=el;
+    for(let i=0;n&&i<8;i++,n=n.parentElement||n.getRootNode?.()?.host)chain.push(n);
+    for(const node of chain){
       if(node.id==='toolbox-v2-host')return null;
       const r=node.getBoundingClientRect(),p=getComputedStyle(node).position;
-      if(r.width>=18&&r.height>=18&&r.width<=180&&r.height<=180&&['fixed','absolute','sticky'].includes(p)){
-        const label=(el.getAttribute?.('aria-label')||el.title||el.textContent||node.getAttribute('aria-label')||node.title||node.id||'외부 도구').trim().slice(0,40);
-        const selector=selectorFor(node)||selectorFor(el);
-        if(!selector||isSelfItem({type:'script',name:label,selector}))return null;
-        return {el:node,selector,label};
-      }
+      if(r.width<15||r.height<15||r.width>240||r.height>240)continue;
+      if(!['fixed','absolute','sticky'].includes(p))continue;
+      if(node.closest?.('header,nav,[role="navigation"]')&&!node.matches(KNOWN_TOOLS))continue;
+      const selector=selectorFor(node);
+      if(!selector)continue;
+      const label=toolName(node,el);
+      if(isSelfItem({type:'script',name:label,selector}))return null;
+      return {el:node,selector,label};
     }
     return null;
   }
   function collect(){
-    if(RECOVERY_MODE)return;
-    if(state.locked)return;
+    if(RECOVERY_MODE||state.locked)return;
     candidates.clear();
     for(const root of roots()){
-      root.querySelectorAll('button,[role="button"],[id*="launcher"],[class*="fab"],[class*="float"],[class*="Float"]').forEach(el=>{
+      root.querySelectorAll(KNOWN_TOOLS+',button,[role="button"],[class*="float"],[class*="Float"],[class*="fab"],[class*="Fab"]').forEach(el=>{
         if(el.hasAttribute('data-toolbox-pinned'))return;
         const tool=floatingTool(el);
-        if(tool)candidates.set(tool.selector,tool);
+        if(tool&&!state.items.some(x=>x.type==='script'&&x.selector===tool.selector))candidates.set(tool.selector,tool);
       });
     }
   }
@@ -200,7 +224,7 @@
     shadow.innerHTML=`<style>
       :host{all:initial;font-family:system-ui,-apple-system,sans-serif;color:#354735;z-index:2147483000;position:fixed;inset:0;pointer-events:none}
       *{box-sizing:border-box}button,input{font:inherit}
-      .launcher{position:fixed;left:calc(100vw - 64px);top:50vh;width:42px;height:42px;display:grid;place-items:center;border:1px solid #b7cdaa;border-radius:15px;background:#e4f1da;color:#719a5c;box-shadow:0 5px 18px #35473530;pointer-events:auto;touch-action:none;cursor:grab}
+      .launcher{position:fixed;left:calc(100vw - 64px);top:50vh;width:34px;height:34px;display:grid;place-items:center;border:1px solid #b7cdaa;border-radius:15px;background:#e4f1da;color:#719a5c;box-shadow:0 5px 18px #35473530;pointer-events:auto;touch-action:none;cursor:grab}
       .launcher.locked{background:#ebebeb;color:#929292;border-color:#d1d1d1}
       .panel{position:fixed;display:none;width:320px;height:410px;min-width:260px;min-height:230px;max-width:95vw;max-height:85vh;background:rgba(247,250,245,.97);border:1px solid #d9e5d4;border-radius:25px;box-shadow:0 18px 50px #203a2c38;pointer-events:auto;overflow:hidden;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
       .panel.open{display:flex;flex-direction:column}
@@ -224,8 +248,8 @@
     button=shadow.querySelector('.launcher');button.title='Toolbox '+BUILD_VERSION;panel=shadow.querySelector('.panel');list=shadow.querySelector('.tools');status=shadow.querySelector('.status');grip=shadow.querySelector('.grip');
     // Never trust a persisted position without checking the current viewport.
     if(state.position&&Number.isFinite(Number(state.position.x))&&Number.isFinite(Number(state.position.y))){
-      const x=clamp(Number(state.position.x),4,Math.max(4,innerWidth-46));
-      const y=clamp(Number(state.position.y),4,Math.max(4,innerHeight-46));
+      const x=clamp(Number(state.position.x),4,Math.max(4,innerWidth-38));
+      const y=clamp(Number(state.position.y),4,Math.max(4,innerHeight-38));
       button.style.left=x+'px';button.style.top=y+'px';
       if(x!==state.position.x||y!==state.position.y){state.position={x,y};save()}
     }else{state.position=null;save()}
