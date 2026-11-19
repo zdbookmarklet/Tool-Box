@@ -1,6 +1,48 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.16';
+  const BUILD_VERSION='2.0.0-alpha.17';
+  // Each cross-origin Zeta chat iframe owns its own DOM. A small frame agent
+  // reports candidates and performs clicks locally; the parent owns the UI.
+  const BRIDGE='zd-toolbox-frame-v1';
+  const isChatFrame=location.hostname==='frame.pingpong.ai';
+  if(isChatFrame){
+    const pins=new Map();
+    const roots=()=>{const out=[],visit=r=>{out.push(r);r.querySelectorAll?.('*').forEach(e=>{if(e.shadowRoot)visit(e.shadowRoot)})};visit(document);return out};
+    const find=id=>{for(const r of roots()){try{const el=r.querySelector('#'+CSS.escape(id));if(el)return el}catch{}}return null};
+    const discover=()=>{
+      const results=[];
+      for(const r of roots())for(const el of r.querySelectorAll('[id],button,[role="button"]')){
+        if(!el.id||el.id==='toolbox-v2-host'||el.closest?.('#toolbox-v2-host'))continue;
+        const box=el.getBoundingClientRect();if(box.width<20||box.height<20||box.width>260||box.height>260)continue;
+        let parent=el,positioned=false;
+        for(let i=0;parent&&i<7;i++,parent=parent.parentElement||parent.getRootNode()?.host){
+          if(['fixed','absolute','sticky'].includes(getComputedStyle(parent).position)){positioned=true;break}
+        }
+        if(!positioned)continue;
+        const name=el.getAttribute('data-tool-name')||el.getAttribute('aria-label')||el.title||
+          el.shadowRoot?.querySelector('.brand,.title,h1,h2')?.textContent||
+          el.querySelector?.('.brand,.title,h1,h2')?.textContent||el.id.replace(/[-_]/g,' ');
+        if(results.some(x=>x.id===el.id))continue;
+        results.push({id:el.id,name:String(name).trim().slice(0,55)});
+        if(results.length>=35)break;
+      }
+      window.parent.postMessage({bridge:BRIDGE,type:'candidates',items:results},'https://zeta-ai.io');
+    };
+    addEventListener('message',event=>{
+      if(event.origin!=='https://zeta-ai.io'||event.source!==window.parent||event.data?.bridge!==BRIDGE)return;
+      const {type,id}=event.data;if(typeof id!=='string'||id.length>120)return;
+      const el=find(id);
+      if(type==='pin'&&el){if(!pins.has(id))pins.set(id,{display:el.style.getPropertyValue('display'),priority:el.style.getPropertyPriority('display')});el.style.setProperty('display','none','important')}
+      if(type==='unpin'){const old=pins.get(id);if(old&&el){if(old.display)el.style.setProperty('display',old.display,old.priority);else el.style.removeProperty('display')}pins.delete(id)}
+      if(type==='run'&&el){const target=el.shadowRoot?.querySelector('button,[role="button"]')||el.matches('button,[role="button"]')&&el||el.querySelector?.('button,[role="button"]')||el;target.click()}
+      if(type==='scan')discover();
+    });
+    let scheduled=false;
+    const observer=new MutationObserver(()=>{if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;discover();for(const id of pins.keys()){const el=find(id);if(el)el.style.setProperty('display','none','important')}},400)});
+    const start=()=>{observer.observe(document.documentElement,{childList:true,subtree:true});discover()};
+    if(document.body)start();else addEventListener('DOMContentLoaded',start,{once:true});
+    return;
+  }
   const KEY='toolbox-v2-state', LEGACY='zeta-tool-pocket-bookmarklets-v1';
   const INSTANCE='__ZETA_TOOLBOX_V2__';
   if (window[INSTANCE]) {
@@ -28,6 +70,20 @@
   const RECOVERY_MODE=false;
   // Preserve saved lock and position; safe capture rules are enforced below.
   const candidates=new Map();
+  const remoteCandidates=new Map();
+  const remoteFrames=new Map();
+  function sendRemote(item,type){const f=remoteFrames.get(item.frameId);if(f?.isConnected)f.contentWindow?.postMessage({bridge:BRIDGE,type,id:item.remoteId},'https://frame.pingpong.ai')}
+  function syncRemote(){for(const item of state.items.filter(x=>x.type==='remote'))sendRemote(item,'pin')}
+  addEventListener('message',event=>{if(event.origin!=='https://frame.pingpong.ai'||event.data?.bridge!==BRIDGE||event.data.type!=='candidates')return;
+    const frame=[...document.querySelectorAll('iframe')].find(f=>f.contentWindow===event.source);if(!frame)return;
+    const frameId=frame.id||frame.getAttribute('name')||'zeta-chat-frame';remoteFrames.set(frameId,frame);
+    for(const [k,v] of remoteCandidates)if(v.frameId===frameId)remoteCandidates.delete(k);
+    for(const entry of (Array.isArray(event.data.items)?event.data.items:[]).slice(0,35)){
+      if(typeof entry.id!=='string'||!/^[\\w-]{2,120}$/.test(entry.id))continue;
+      remoteCandidates.set(frameId+':'+entry.id,{frameId,remoteId:entry.id,label:String(entry.name||entry.id).slice(0,55)});
+    }
+    syncRemote();if(!state.locked&&panel?.classList.contains('open'))render();
+  });
   const tracked=new Map();
   let collecting=false,observer=null,host,shadow,button,panel,list,status,grip,pressTimer,pressed=false;
   const icon='<svg viewBox="0 0 48 48" width="18" height="18" fill="none" aria-hidden="true"><rect x="7" y="18" width="34" height="24" rx="5" fill="currentColor" opacity=".82"/><path d="M5 15c0-2 2-4 4-4h30c2 0 4 2 4 4v7H5z" fill="currentColor"/><path d="M24 11v31M9 27h30" stroke="white" stroke-width="3" opacity=".9"/><path d="M23 12C11 13 11 3 17 4c4 0 6 5 7 8Zm2 0C37 13 37 3 31 4c-4 0-6 5-7 8Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg>';
@@ -44,6 +100,7 @@
   }
   function applyPinned(){
     if(RECOVERY_MODE)return;
+    syncRemote();
     for(const item of state.items.filter(x=>x.type==='script'&&x.selector&&x.safeCapture===true)){
       let found=false;
       for(const root of roots()){
@@ -134,6 +191,7 @@
     }
   }
   function restorePin(item){
+    if(item.type==='remote'){sendRemote(item,'unpin');return}
     const el=tracked.get(item.id);
     if(el){el.style.removeProperty('display');el.removeAttribute('data-toolbox-pinned');tracked.delete(item.id)}
     for(const root of roots()){try{root.querySelectorAll(item.selector).forEach(node=>{
@@ -141,6 +199,7 @@
     })}catch{}}
   }
   function runExternal(item){
+    if(item.type==='remote'){sendRemote(item,'run');return}
     let target=tracked.get(item.id);
     if(!target?.isConnected){
       for(const root of roots()){try{target=root.querySelector(item.selector);if(target)break}catch{}}
@@ -213,7 +272,7 @@
           shadow.querySelector('.context-menu')?.remove();
           const menu=document.createElement('div');menu.className='context-menu';
           const actions=[['✎  편집',()=>editTool(item)],['↑  앞으로 이동',()=>moveTool(item,-1)],['↓  뒤로 이동',()=>moveTool(item,1)],['×  수납 해제',()=>{
-            if(item.type==='script')restorePin(item);
+            if(item.type==='script'||item.type==='remote')restorePin(item);
             state.items=state.items.filter(x=>x.id!==item.id);save();render();
           }]];
           for(const [label,fn] of actions){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{menu.remove();fn()};menu.append(b)}
@@ -252,6 +311,11 @@
     }
     if(!state.items.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='아직 담긴 도구가 없습니다';list.append(empty)}
     if(!state.locked&&!RECOVERY_MODE){
+      for(const [key,c] of remoteCandidates){
+        if(state.items.some(x=>x.type==='remote'&&x.frameId===c.frameId&&x.remoteId===c.remoteId))continue;
+        const row=add(c.label,()=>{state.items.push({id:'remote-'+Date.now(),type:'remote',frameId:c.frameId,remoteId:c.remoteId,name:c.label,icon:'🧩',category:'기본'});save();syncRemote();render()},'추가 +');
+        row.classList.add('candidate');
+      }
       collect();
       for(const [selector,c] of candidates){
         if(isSelfItem({type:'script',name:c.label,selector})||state.items.some(x=>x.selector===selector))continue;
