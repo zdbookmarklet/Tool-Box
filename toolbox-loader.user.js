@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         Toolbox | Zeta Loader
 // @namespace    zdbookmarklet.toolbox
-// @version      2.0.0-alpha.9
+// @version      2.0.0-alpha.17
 // @description  Loads Toolbox from GitHub without page inline-script injection
 // @match        https://zeta-ai.io/ko*
 // @match        https://*.zeta-ai.io/ko*
+// @match        https://frame.pingpong.ai/*
+// @all-frames   true
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
@@ -19,7 +21,7 @@
   function execute(code) {
     try {
       (new Function(code+'\n//# sourceURL=toolbox.js'))();
-      report('Toolbox 실행 완료 · 본체 '+(code.match(/BUILD_VERSION='([^']+)'/)?.[1]||'버전 미확인'));
+      if(location.hostname!=='frame.pingpong.ai')report('Toolbox 실행 완료 · 본체 '+(code.match(/BUILD_VERSION='([^']+)'/)?.[1]||'버전 미확인'));
     } catch(error) {
       report('Toolbox 실행 오류: '+error.message);
       console.error(PREFIX,'Toolbox core execution failed',error);
@@ -36,7 +38,7 @@
     timeout:15000,
     onload(response) {
       if(response.status!==200){report('Toolbox 다운로드 오류 HTTP '+response.status);console.error(PREFIX,'Download HTTP',response.status);return}
-      report('Toolbox 다운로드 성공 · '+response.responseText.length+'자');
+      if(location.hostname!=='frame.pingpong.ai')report('Toolbox 다운로드 성공 · '+response.responseText.length+'자');
       execute(response.responseText);
     },
     onerror(error){report('Toolbox 다운로드 실패');console.error(PREFIX,'Download failed',error)},
