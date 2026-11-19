@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.17';
+  const BUILD_VERSION='2.0.0-alpha.18';
   // Each cross-origin Zeta chat iframe owns its own DOM. A small frame agent
   // reports candidates and performs clicks locally; the parent owns the UI.
   const BRIDGE='zd-toolbox-frame-v1';
@@ -43,6 +43,13 @@
     if(document.body)start();else addEventListener('DOMContentLoaded',start,{once:true});
     return;
   }
+  const shadowRegistry=window.__TOOLBOX_SHADOW_ROOTS__||(window.__TOOLBOX_SHADOW_ROOTS__=new WeakMap());
+  if(!window.__TOOLBOX_SHADOW_HOOK__){
+    const original=Element.prototype.attachShadow;
+    Element.prototype.attachShadow=function(options){const root=Reflect.apply(original,this,[options]);shadowRegistry.set(this,root);return root};
+    window.__TOOLBOX_SHADOW_HOOK__=true;
+  }
+  const shadowOf=el=>el?.shadowRoot||shadowRegistry.get(el)||null;
   const KEY='toolbox-v2-state', LEGACY='zeta-tool-pocket-bookmarklets-v1';
   const INSTANCE='__ZETA_TOOLBOX_V2__';
   if (window[INSTANCE]) {
@@ -91,7 +98,7 @@
     const out=[]; const walk=node=>{
       if(node===shadow||node?.host?.id==='toolbox-v2-host')return;
       out.push(node);
-      node.querySelectorAll?.('*').forEach(el=>{if(el.id==='toolbox-v2-host')return;if(el.shadowRoot){walk(el.shadowRoot)}});
+      node.querySelectorAll?.('*').forEach(el=>{if(el.id==='toolbox-v2-host')return;if(shadowOf(el)){walk(shadowOf(el))}});
     };walk(root);return out;
   }
   function matchesItem(el,item){
@@ -103,6 +110,8 @@
     syncRemote();
     for(const item of state.items.filter(x=>x.type==='script'&&x.selector&&x.safeCapture===true)){
       let found=false;
+      const live=liveTargets.get(item.selector);
+      if(live?.el?.isConnected){live.el.setAttribute('data-toolbox-pinned',item.id);live.el.style.setProperty('visibility','hidden','important');tracked.set(item.id,live.el);found=true}
       for(const root of roots()){
         try{root.querySelectorAll(item.selector).forEach(el=>{
           if(el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host'))return;
@@ -132,7 +141,7 @@
   const normalizeName=v=>String(v||'').replace(/\s+/g,' ').trim().slice(0,40);
   const genericName=/^(중단|정지|닫기|열기|메뉴|햄버거|토글|실행|설정|on|off|start|stop|close|open|menu|toggle|button|fab)$/i;
   function toolName(node,button){
-    const root=node.shadowRoot;
+    const root=shadowOf(node);
     const title=root?.querySelector('.brand,.title,.header-title,h1,h2,h3,[data-tool-name]')||
       node.querySelector?.('.brand,.title,.header-title,h1,h2,h3,[data-tool-name]');
     const candidates=[
@@ -161,55 +170,56 @@
     }
     return '';
   }
+  const liveTargets=new Map();
   function floatingTool(el){
     if(!(el instanceof Element)||el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host'))return null;
-    const chain=[];let n=el;
-    for(let i=0;n&&i<8;i++,n=n.parentElement||n.getRootNode?.()?.host)chain.push(n);
+    const chain=[];for(let n=el,i=0;n&&i<12;i++,n=n.parentElement||n.getRootNode?.()?.host)chain.push(n);
+    if(chain.some(n=>n.id==='toolbox-v2-host'))return null;
+    const control=chain.find(n=>n.matches?.('button,[role="button"],a'))||(shadowOf(el)||el).querySelector?.('button,[role="button"],a');
+    if(!control)return null;
     for(const node of chain){
-      if(node.id==='toolbox-v2-host')return null;
-      const r=node.getBoundingClientRect(),p=getComputedStyle(node).position;
-      if(r.width<15||r.height<15||r.width>240||r.height>240)continue;
-      if(!['fixed','absolute','sticky'].includes(p))continue;
+      const r=node.getBoundingClientRect(),style=getComputedStyle(node);
+      if(r.width<12||r.height<12||r.width>260||r.height>260)continue;
+      if(!['fixed','absolute','sticky'].includes(style.position))continue;
+      if(style.display==='none'||style.visibility==='hidden')continue;
       if(node.closest?.('header,nav,[role="navigation"]')&&!node.matches(KNOWN_TOOLS))continue;
-      const selector=stableSelector(node)||stableSelector(el);
-      if(!selector)continue;
-      const label=toolName(node,el);
+      const selector=stableSelector(node)||stableSelector(control)||('live:'+node.tagName+':'+(node.id||control.id||'floating'));
+      const label=toolName(node,control);
       if(isSelfItem({type:'script',name:label,selector}))return null;
-      return {el:node,selector,label};
+      return {el:node,control,selector,label};
     }
     return null;
   }
   function collect(){
     if(RECOVERY_MODE||state.locked)return;
-    candidates.clear();
-    for(const root of roots()){
-      root.querySelectorAll(KNOWN_TOOLS+',button,[role="button"],[class*="float"],[class*="Float"],[class*="fab"],[class*="Fab"],[style*="fixed"],[style*="absolute"]').forEach(el=>{
-        if(el.hasAttribute('data-toolbox-pinned'))return;
-        const tool=floatingTool(el);
-        if(tool&&!state.items.some(x=>x.type==='script'&&x.selector===tool.selector))candidates.set(tool.selector,tool);
-      });
+    candidates.clear();liveTargets.clear();
+    for(const root of roots())for(const el of root.querySelectorAll(KNOWN_TOOLS+',button,[role="button"],[class*="float"],[class*="Float"],[class*="fab"],[class*="Fab"],[style*="fixed"],[style*="absolute"]')){
+      if(el.hasAttribute('data-toolbox-pinned'))continue;
+      const tool=floatingTool(el);if(!tool)continue;
+      if(!liveTargets.has(tool.selector))liveTargets.set(tool.selector,tool);
+      if(!state.items.some(x=>x.type==='script'&&x.selector===tool.selector))candidates.set(tool.selector,tool);
     }
   }
   function restorePin(item){
     if(item.type==='remote'){sendRemote(item,'unpin');return}
     const el=tracked.get(item.id);
-    if(el){el.style.removeProperty('display');el.removeAttribute('data-toolbox-pinned');tracked.delete(item.id)}
+    if(el){el.style.removeProperty('display');el.style.removeProperty('visibility');el.removeAttribute('data-toolbox-pinned');tracked.delete(item.id)}
     for(const root of roots()){try{root.querySelectorAll(item.selector).forEach(node=>{
       if(node.getAttribute('data-toolbox-pinned')===item.id){node.style.removeProperty('display');node.removeAttribute('data-toolbox-pinned')}
     })}catch{}}
   }
   function runExternal(item){
     if(item.type==='remote'){sendRemote(item,'run');return}
-    let target=tracked.get(item.id);
+    let target=tracked.get(item.id)||liveTargets.get(item.selector)?.el;
     if(!target?.isConnected){
       for(const root of roots()){try{target=root.querySelector(item.selector);if(target)break}catch{}}
     }
     if(!target){alert('외부 도구 연결이 끊겼습니다. 도구가 실행 중인지 확인해주세요.');return}
     // Click the actual control, not an inert host container.
-    const root=target.shadowRoot||target;
+    const root=shadowOf(target)||target;
     const control=target.matches?.('button,[role="button"],a,input[type="button"]')?target:
       root.querySelector?.('button,[role="button"],a,input[type="button"]');
-    const press=control||target;
+    const press=liveTargets.get(item.selector)?.control||control||target;
     try{
       press.click();
     }catch(error){alert('도구 실행 실패: '+error.message)}
