@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.21';
+  const BUILD_VERSION='2.0.0-alpha.22';
   // Each cross-origin Zeta chat iframe owns its own DOM. A small frame agent
   // reports candidates and performs clicks locally; the parent owns the UI.
   const BRIDGE='zd-toolbox-frame-v1';
@@ -494,7 +494,15 @@
     button.style.setProperty('display','grid','important');
     button.style.setProperty('visibility','visible','important');
     panel.style.width=state.size.w+'px';panel.style.height=state.size.h+'px';
-    const open=()=>{const r=button.getBoundingClientRect();panel.style.left=clamp(r.left-state.size.w,8,Math.max(8,innerWidth-state.size.w-8))+'px';panel.style.top=clamp(r.top,8,Math.max(8,innerHeight-state.size.h-8))+'px';panel.classList.add('open');render()};
+    const positionPanel=()=>{
+      const r=button.getBoundingClientRect();
+      const w=panel.offsetWidth||state.size.w,h=panel.offsetHeight||state.size.h;
+      const maxX=Math.max(8,innerWidth-w-8),maxY=Math.max(8,innerHeight-h-8);
+      const desiredX=r.left>=w+16?r.left-w-8:r.right+8;
+      panel.style.left=clamp(desiredX,8,maxX)+'px';
+      panel.style.top=clamp(r.top,8,maxY)+'px';
+    };
+    const open=()=>{panel.classList.add('open');positionPanel();render()};
     shadow.querySelector('.close').onclick=()=>panel.classList.remove('open');
     shadow.querySelector('.editmode').onclick=()=>{editMode=!editMode;render()};
     const toggle=()=>{state.locked=!state.locked;save();render()};
@@ -552,7 +560,11 @@
       if(!drag||e.pointerId!==drag.id)return;
       const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
       if(Math.hypot(dx,dy)>7){drag.moved=true;skipClick=true;clearTimeout(pressTimer)}
-      if(drag.moved){button.style.left=clamp(drag.left+dx,4,innerWidth-52)+'px';button.style.top=clamp(drag.top+dy,4,innerHeight-52)+'px'}
+      if(drag.moved){
+        button.style.left=clamp(drag.left+dx,4,Math.max(4,innerWidth-38))+'px';
+        button.style.top=clamp(drag.top+dy,4,Math.max(4,innerHeight-38))+'px';
+        if(panel.classList.contains('open'))positionPanel();
+      }
     });
     const finish=e=>{if(!drag)return;clearTimeout(pressTimer);if(drag.moved){state.position={x:parseFloat(button.style.left),y:parseFloat(button.style.top)};save()}drag=null};
     button.addEventListener('pointerup',finish);button.addEventListener('pointercancel',finish);
@@ -591,7 +603,7 @@
     document.addEventListener('pointercancel',()=>{incoming=null},true);
     let resize=null;
     grip.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();resize={id:e.pointerId,x:e.clientX,y:e.clientY,w:panel.offsetWidth,h:panel.offsetHeight};grip.setPointerCapture(e.pointerId)});
-    grip.addEventListener('pointermove',e=>{if(!resize||e.pointerId!==resize.id)return;state.size.w=clamp(resize.w+e.clientX-resize.x,260,innerWidth-20);state.size.h=clamp(resize.h+e.clientY-resize.y,230,innerHeight-20);panel.style.width=state.size.w+'px';panel.style.height=state.size.h+'px'});
+    grip.addEventListener('pointermove',e=>{if(!resize||e.pointerId!==resize.id)return;state.size.w=clamp(resize.w+e.clientX-resize.x,260,innerWidth-20);state.size.h=clamp(resize.h+e.clientY-resize.y,230,innerHeight-20);panel.style.width=state.size.w+'px';panel.style.height=state.size.h+'px';if(panel.classList.contains('open'))positionPanel()});
     grip.addEventListener('pointerup',()=>{resize=null;save()});grip.addEventListener('pointercancel',()=>{resize=null;save()});
     // Re-hide recreated launchers without full-page periodic scans.
     let scheduled=false;
@@ -600,7 +612,7 @@
       scheduled=true;requestAnimationFrame(()=>{scheduled=false;applyPinned();if(!state.locked&&panel.classList.contains('open'))render()});
     });
     observer.observe(document.documentElement,{childList:true,subtree:true});
-    addEventListener('resize',()=>{const r=button.getBoundingClientRect();const x=clamp(r.left,4,Math.max(4,innerWidth-52)),y=clamp(r.top,4,Math.max(4,innerHeight-52));button.style.left=x+'px';button.style.top=y+'px';state.position={x,y};save()},{passive:true});
+    addEventListener('resize',()=>{const r=button.getBoundingClientRect();const x=clamp(r.left,4,Math.max(4,innerWidth-52)),y=clamp(r.top,4,Math.max(4,innerHeight-52));button.style.left=x+'px';button.style.top=y+'px';if(panel.classList.contains('open'))positionPanel();state.position={x,y};save()},{passive:true});
     // Undo stale inline hiding left by older Toolbox versions.
     for(const el of document.querySelectorAll('[data-toolbox-pinned]')){
       el.style.removeProperty('display');
