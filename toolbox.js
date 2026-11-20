@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.18';
+  const BUILD_VERSION='2.0.0-alpha.19';
   // Each cross-origin Zeta chat iframe owns its own DOM. A small frame agent
   // reports candidates and performs clicks locally; the parent owns the UI.
   const BRIDGE='zd-toolbox-frame-v1';
@@ -12,7 +12,7 @@
     const discover=()=>{
       const results=[];
       for(const r of roots())for(const el of r.querySelectorAll('[id],button,[role="button"]')){
-        if(!el.id||el.id==='toolbox-v2-host'||el.closest?.('#toolbox-v2-host'))continue;
+        if(!el.id||el.id==='toolbox-v2-host'||el.id==='toolbox-loader-diagnostic'||el.closest?.('#toolbox-v2-host'))continue;
         const box=el.getBoundingClientRect();if(box.width<20||box.height<20||box.width>260||box.height>260)continue;
         let parent=el,positioned=false;
         for(let i=0;parent&&i<7;i++,parent=parent.parentElement||parent.getRootNode()?.host){
@@ -41,6 +41,8 @@
     const observer=new MutationObserver(()=>{if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;discover();for(const id of pins.keys()){const el=find(id);if(el)el.style.setProperty('display','none','important')}},400)});
     const start=()=>{observer.observe(document.documentElement,{childList:true,subtree:true});discover()};
     if(document.body)start();else addEventListener('DOMContentLoaded',start,{once:true});
+    // Parent can initialize after the first candidate broadcast.
+    addEventListener('load',discover,{once:true});
     return;
   }
   const shadowRegistry=window.__TOOLBOX_SHADOW_ROOTS__||(window.__TOOLBOX_SHADOW_ROOTS__=new WeakMap());
@@ -86,7 +88,7 @@
     const frameId=frame.id||frame.getAttribute('name')||'zeta-chat-frame';remoteFrames.set(frameId,frame);
     for(const [k,v] of remoteCandidates)if(v.frameId===frameId)remoteCandidates.delete(k);
     for(const entry of (Array.isArray(event.data.items)?event.data.items:[]).slice(0,35)){
-      if(typeof entry.id!=='string'||!/^[\\w-]{2,120}$/.test(entry.id))continue;
+      if(typeof entry.id!=='string'||!/^[A-Za-z0-9_-]{2,120}$/.test(entry.id))continue;
       remoteCandidates.set(frameId+':'+entry.id,{frameId,remoteId:entry.id,label:String(entry.name||entry.id).slice(0,55)});
     }
     syncRemote();if(!state.locked&&panel?.classList.contains('open'))render();
@@ -541,6 +543,11 @@
       el.removeAttribute('data-toolbox-pinned');
     }
     applyPinned();render();
+    // Request a fresh snapshot after parent UI and listeners are ready.
+    for(const frame of document.querySelectorAll('iframe')){
+      if(frame.src&&new URL(frame.src,location.href).origin==='https://frame.pingpong.ai')
+        frame.contentWindow?.postMessage({bridge:BRIDGE,type:'scan',id:'all'},'https://frame.pingpong.ai');
+    }
   }
   window[INSTANCE]={version:BUILD_VERSION,destroy(){observer?.disconnect();host?.remove();delete window[INSTANCE]},rescan(){applyPinned();render()}};
   if(document.body)init();else addEventListener('DOMContentLoaded',init,{once:true});
