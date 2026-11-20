@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.20';
+  const BUILD_VERSION='2.0.0-alpha.21';
   // Each cross-origin Zeta chat iframe owns its own DOM. A small frame agent
   // reports candidates and performs clicks locally; the parent owns the UI.
   const BRIDGE='zd-toolbox-frame-v1';
@@ -28,17 +28,47 @@
       }
       window.parent.postMessage({bridge:BRIDGE,type:'candidates',items:results},'https://zeta-ai.io');
     };
+    // Hide the launcher only. Never hide the host: its Shadow DOM may contain
+    // the intermediate panel and the expanded editor.
+    const launcherOf=el=>{
+      const root=el.shadowRoot||el;
+      return root.querySelector?.('#zrbubble,#launcher,.launcher,.fab,[data-tool-launcher],button[aria-label]')||
+        (el.matches?.('button,[role="button"]')?el:null)||
+        root.querySelector?.('button,[role="button"]')||el;
+    };
+    const hidden=new Map();
+    const conceal=id=>{
+      const el=find(id);if(!el)return;
+      const launcher=launcherOf(el);
+      if(!hidden.has(id)||hidden.get(id).node!==launcher){
+        const old=hidden.get(id);if(old?.node?.isConnected)old.node.style.cssText=old.style;
+        hidden.set(id,{node:launcher,style:launcher.style.cssText});
+      }
+      launcher.style.setProperty('opacity','0','important');
+      launcher.style.setProperty('pointer-events','none','important');
+      launcher.style.setProperty('visibility','hidden','important');
+    };
+    const reveal=id=>{
+      const old=hidden.get(id);
+      if(old?.node?.isConnected)old.node.style.cssText=old.style;
+      hidden.delete(id);
+    };
     addEventListener('message',event=>{
       if(event.origin!=='https://zeta-ai.io'||event.source!==window.parent||event.data?.bridge!==BRIDGE)return;
-      const {type,id}=event.data;if(typeof id!=='string'||id.length>120)return;
+      const {type,id}=event.data;
+      if(type==='scan'){discover();return}
+      if(typeof id!=='string'||id.length>120)return;
       const el=find(id);
-      if(type==='pin'&&el){if(!pins.has(id))pins.set(id,{display:el.style.getPropertyValue('display'),priority:el.style.getPropertyPriority('display')});el.style.setProperty('display','none','important')}
-      if(type==='unpin'){const old=pins.get(id);if(old&&el){if(old.display)el.style.setProperty('display',old.display,old.priority);else el.style.removeProperty('display')}pins.delete(id)}
-      if(type==='run'&&el){const target=el.shadowRoot?.querySelector('button,[role="button"]')||el.matches('button,[role="button"]')&&el||el.querySelector?.('button,[role="button"]')||el;target.click()}
-      if(type==='scan')discover();
+      if(type==='pin'){pins.set(id,true);conceal(id)}
+      if(type==='unpin'){pins.delete(id);reveal(id)}
+      if(type==='run'&&el){
+        const target=launcherOf(el);
+        // Keep the actual launcher mounted and its original handlers intact.
+        target.click();
+      }
     });
     let scheduled=false;
-    const observer=new MutationObserver(()=>{if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;discover();for(const id of pins.keys()){const el=find(id);if(el)el.style.setProperty('display','none','important')}},400)});
+    const observer=new MutationObserver(()=>{if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;discover();for(const id of pins.keys())conceal(id)},400)});
     const start=()=>{observer.observe(document.documentElement,{childList:true,subtree:true});discover()};
     if(document.body)start();else addEventListener('DOMContentLoaded',start,{once:true});
     // Parent can initialize after the first candidate broadcast.
@@ -117,20 +147,40 @@
     if(!el||!el.isConnected||!item.selector)return false;
     try{return el.matches(item.selector)}catch{return false}
   }
+  const originalLaunchers=new Map();
+  const launchControl=el=>{
+    const root=shadowOf(el)||el;
+    return root.querySelector?.('#launcher,#btn,#zrbubble,.launcher,.fab,[data-tool-launcher]')||
+      (el.matches?.('button,[role="button"],a')?el:null)||
+      root.querySelector?.('button,[role="button"],a')||el;
+  };
+  function hideLauncher(el,item){
+    const target=launchControl(el);
+    const previous=originalLaunchers.get(item.id);
+    if(previous?.node!==target){
+      if(previous?.node?.isConnected)previous.node.style.cssText=previous.style;
+      originalLaunchers.set(item.id,{node:target,style:target.style.cssText});
+    }
+    // Hiding only the launcher preserves the tool's own intermediate/full panels.
+    target.style.setProperty('opacity','0','important');
+    target.style.setProperty('pointer-events','none','important');
+    target.style.setProperty('visibility','hidden','important');
+    el.setAttribute('data-toolbox-pinned',item.id);
+    tracked.set(item.id,el);
+  }
   function applyPinned(){
     if(RECOVERY_MODE)return;
     syncRemote();
     for(const item of state.items.filter(x=>x.type==='script'&&x.selector&&x.safeCapture===true)){
-      let found=false;
       const live=liveTargets.get(item.selector);
-      if(live?.el?.isConnected){live.el.setAttribute('data-toolbox-pinned',item.id);live.el.style.setProperty('visibility','hidden','important');tracked.set(item.id,live.el);found=true}
+      if(live?.el?.isConnected){hideLauncher(live.el,item);continue}
+      let found=false;
       for(const root of roots()){
-        try{root.querySelectorAll(item.selector).forEach(el=>{
-          if(el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host'))return;
-          el.setAttribute('data-toolbox-pinned',item.id);
-          el.style.setProperty('display','none','important');
-          tracked.set(item.id,el);found=true;
-        })}catch{}
+        try{for(const el of root.querySelectorAll(item.selector)){
+          if(el===host||el.getRootNode?.()===shadow||el.closest?.('#toolbox-v2-host'))continue;
+          hideLauncher(el,item);found=true;break;
+        }}catch{}
+        if(found)break;
       }
       if(!found)tracked.delete(item.id);
     }
@@ -214,11 +264,12 @@
   }
   function restorePin(item){
     if(item.type==='remote'){sendRemote(item,'unpin');return}
+    const saved=originalLaunchers.get(item.id);
+    if(saved?.node?.isConnected)saved.node.style.cssText=saved.style;
+    originalLaunchers.delete(item.id);
     const el=tracked.get(item.id);
-    if(el){el.style.removeProperty('display');el.style.removeProperty('visibility');el.removeAttribute('data-toolbox-pinned');tracked.delete(item.id)}
-    for(const root of roots()){try{root.querySelectorAll(item.selector).forEach(node=>{
-      if(node.getAttribute('data-toolbox-pinned')===item.id){node.style.removeProperty('display');node.removeAttribute('data-toolbox-pinned')}
-    })}catch{}}
+    if(el?.getAttribute('data-toolbox-pinned')===item.id)el.removeAttribute('data-toolbox-pinned');
+    tracked.delete(item.id);
   }
   function runExternal(item){
     if(item.type==='remote'){sendRemote(item,'run');return}
@@ -231,7 +282,7 @@
     const root=shadowOf(target)||target;
     const control=target.matches?.('button,[role="button"],a,input[type="button"]')?target:
       root.querySelector?.('button,[role="button"],a,input[type="button"]');
-    const press=liveTargets.get(item.selector)?.control||control||target;
+    const press=originalLaunchers.get(item.id)?.node||liveTargets.get(item.selector)?.control||control||target;
     try{
       press.click();
     }catch(error){alert('도구 실행 실패: '+error.message)}
@@ -553,6 +604,9 @@
     // Undo stale inline hiding left by older Toolbox versions.
     for(const el of document.querySelectorAll('[data-toolbox-pinned]')){
       el.style.removeProperty('display');
+      el.style.removeProperty('visibility');
+      el.style.removeProperty('pointer-events');
+      el.style.removeProperty('opacity');
       el.removeAttribute('data-toolbox-pinned');
     }
     applyPinned();render();
@@ -562,6 +616,6 @@
         frame.contentWindow?.postMessage({bridge:BRIDGE,type:'scan',id:'all'},'https://frame.pingpong.ai');
     }
   }
-  window[INSTANCE]={version:BUILD_VERSION,destroy(){observer?.disconnect();host?.remove();delete window[INSTANCE]},rescan(){applyPinned();render()}};
+  window[INSTANCE]={version:BUILD_VERSION,destroy(){observer?.disconnect();for(const [id,saved] of originalLaunchers){if(saved.node?.isConnected)saved.node.style.cssText=saved.style}originalLaunchers.clear();bannerObserver.disconnect();host?.remove();delete window[INSTANCE]},rescan(){applyPinned();render()}};
   if(document.body)init();else addEventListener('DOMContentLoaded',init,{once:true});
 })();
