@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Toolbox | Zeta Loader
 // @namespace    zdbookmarklet.toolbox
-// @version      2.0.0-alpha.18
+// @version      2.0.0-alpha.19
 // @description  Loads Toolbox from GitHub without page inline-script injection
 // @match        https://zeta-ai.io/ko*
 // @match        https://*.zeta-ai.io/ko*
