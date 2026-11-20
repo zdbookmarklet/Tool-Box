@@ -1,7 +1,7 @@
 // ==PocketCore==
 // @name         Zeta 화면 보정 + 도구 주머니
 // @namespace    zeta-screen-kit
-// @version      1.1.58
+// @version      1.1.59
 // @description  제타 화면·키보드를 보정하고 플로팅 도구와 직접 저장한 북마클릿을 주머니에 담습니다.
 // @match        https://zeta-ai.io/ko
 // @match        https://zeta-ai.io/ko/*
@@ -16,7 +16,7 @@
 
   const w = window;
   const d = document;
-  const VERSION = '1.1.58';
+  const VERSION = '1.1.59';
   const INSTANCE_KEY = '__ZETA_FULLSCREEN_TOOL_POCKET__';
   const RUNTIME_UPDATE_KEY = '__ZETA_SCREEN_KIT_ALL_UPDATE__';
   const RUNTIME_SOURCE_URL = 'https://zetdal-screen-kit.netlify.app/all.js';
@@ -1765,7 +1765,33 @@
       .sort((left, right) => left.area - right.area)[0]?.container || null;
   }
 
+  function scanFontTuner() {
+    // Font Tuner 1.4.0 uses a zero-size fixed host, with its 25px button
+    // positioned inside an open ShadowRoot. Generic host-size checks miss it.
+    const host = d.getElementById('font-tuner-host');
+    if (!(host instanceof HTMLElement)) return;
+    const root = shadowRootOf(host);
+    const launcher = root?.getElementById('launcher');
+    if (!(launcher instanceof HTMLElement)) return;
+    const id = 'known:font-tuner';
+    // Restore selections captured by older generic/dragged detection.
+    const legacy = [...selectedIDs].filter(oldID =>
+      oldID !== id && /font[-_]?tuner|폰트[-_]?튜너/i.test(oldID)
+    );
+    const fingerprintID = savedIDForLauncher(launcher);
+    if (fingerprintID && fingerprintID !== id) legacy.push(fingerprintID);
+    for (const [fingerprint, oldID] of Object.entries(capturedFingerprints)) {
+      if (/font-tuner-host|폰트.?튜너/i.test(fingerprint) && selectedIDs.has(oldID) && oldID !== id) legacy.push(oldID);
+    }
+    if (legacy.length) migrateSelection(legacy, id);
+    registerElement(launcher, {
+      id, label: '폰트 튜너', icon: 'Aa', group: '도구',
+      order: 75, hideTarget: launcher,
+    });
+  }
+
   function scanKnownTools() {
+    scanFontTuner();
     const known = [
       ['#zeta-chat-summary-float-button', '대화 추출·요약', '📝', 20],
       ['#zeta-visible-join-button', '메시지 줄 합치기', '🧩', 30],
