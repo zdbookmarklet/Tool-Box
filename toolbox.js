@@ -61,6 +61,16 @@
     try{delete window[INSTANCE]}catch{}
   }
   console.info('[Toolbox Core] loaded',BUILD_VERSION,location.href);
+  // Older installed loaders print a persistent success banner. Suppress it
+  // from the core so users do not need to reinstall the loader.
+  const clearLegacyLoaderBanner=()=>{
+    const el=document.getElementById('toolbox-loader-diagnostic');
+    if(el&&/Toolbox (로더|다운로드 성공|실행 완료)/.test(el.textContent||''))el.remove();
+  };
+  clearLegacyLoaderBanner();
+  const bannerObserver=new MutationObserver(clearLegacyLoaderBanner);
+  bannerObserver.observe(document.documentElement,{childList:true,subtree:true,characterData:true});
+
   const state=(()=>{try{return {...{locked:true,items:[],position:null,size:{w:320,h:410}},...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{return {locked:true,items:[],position:null,size:{w:320,h:410}}}})();
   // Recover from older builds that accidentally pinned Toolbox itself.
   const isSelfItem=item=>item?.type==='script'&&(
