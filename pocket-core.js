@@ -1,7 +1,7 @@
 // ==PocketCore==
 // @name         Zeta 화면 보정 + 도구 주머니
 // @namespace    zeta-screen-kit
-// @version      1.1.60
+// @version      1.1.61
 // @description  제타 화면·키보드를 보정하고 플로팅 도구와 직접 저장한 북마클릿을 주머니에 담습니다.
 // @match        https://zeta-ai.io/ko
 // @match        https://zeta-ai.io/ko/*
@@ -16,7 +16,7 @@
 
   const w = window;
   const d = document;
-  const VERSION = '1.1.60';
+  const VERSION = '1.1.61';
   const INSTANCE_KEY = '__ZETA_FULLSCREEN_TOOL_POCKET__';
   const RUNTIME_UPDATE_KEY = '__ZETA_SCREEN_KIT_ALL_UPDATE__';
   const RUNTIME_SOURCE_URL = 'https://zetdal-screen-kit.netlify.app/all.js';
@@ -1544,7 +1544,16 @@
     });
   }
 
+  function pocketCaptureLocked() {
+    try { return localStorage.getItem('zeta_tool_pocket_capture_locked_v1') === '1'; }
+    catch (_) { return false; }
+  }
+
   function enroll(ids) {
+    if (pocketCaptureLocked()) {
+      pocket?.toast?.('수납 잠금 중입니다 🔒');
+      return;
+    }
     const added = [];
     ids.forEach(id => {
       if (!candidates.has(id) || selectedIDs.has(id)) return;
@@ -2617,7 +2626,7 @@
         button{font:inherit;-webkit-tap-highlight-color:transparent}
         .scrim{position:fixed;inset:0;border:0;background:rgba(0,0,0,.24);opacity:0;pointer-events:none;transition:opacity .18s ease}
         .launcher{position:fixed;display:grid;place-items:center;width:42px;height:42px;padding:0;border:0;background:transparent;color:#fff;filter:drop-shadow(0 5px 5px rgba(0,0,0,.3));pointer-events:auto;touch-action:none;cursor:grab;transition:transform .16s ease,opacity .16s ease,filter .16s ease}
-        :host(.pocket-locked) .launcher{filter:grayscale(1)!important;opacity:.48!important;cursor:not-allowed}
+        :host(.pocket-locked) .launcher{filter:grayscale(1)!important;opacity:.48!important;cursor:pointer}
         :host(.pocket-locked) .folder{filter:grayscale(1)}
         .launcher:active{transform:scale(.94);filter:drop-shadow(0 5px 7px rgba(0,0,0,.26))}
         .folder{width:33px;height:30px;display:block;overflow:visible}
@@ -2725,10 +2734,13 @@
     const cancelPocketHold = () => { clearTimeout(pocketHoldTimer); pocketHoldTimer = 0; };
     const togglePocketLock = () => {
       pocketLocked = !pocketLocked;
+      if (pocketLocked && candidateDrag) {
+        candidateDrag = null;
+        host.classList.remove('drop-ready', 'drop-hover');
+      }
       host.classList.toggle('pocket-locked', pocketLocked);
       launcher.setAttribute('aria-label', pocketLocked ? '도구 주머니 잠금 해제: 길게 누르기' : '도구 주머니 열기: 길게 누르면 잠금');
       try { localStorage.setItem(POCKET_LOCK_KEY, pocketLocked ? '1' : '0'); } catch (_) {}
-      if (pocketLocked && open) close();
       toast(pocketLocked ? '수납 잠금 ON 🔒' : '수납 잠금 OFF 🔓');
     };
     let managing = false;
@@ -2904,7 +2916,6 @@
       launcher.setAttribute('aria-expanded', 'false');
     };
     const openPocket = () => {
-      if (pocketLocked) return;
       if (d.documentElement.classList.contains('zfp-keyboard')) return;
       open = true;
       host.classList.add('open');
@@ -3238,7 +3249,6 @@
     launcher.addEventListener('pointercancel', finishDrag);
     launcher.addEventListener('click', event => {
       if (suppressClick || pocketHoldTriggered) { suppressClick = false; pocketHoldTriggered = false; event.preventDefault(); return; }
-      if (pocketLocked) { event.preventDefault(); return; }
       toggle();
     });
     head.addEventListener('pointerdown', event => {
@@ -3559,6 +3569,7 @@
   }
 
   function beginCandidateDrag(event) {
+    if (pocketCaptureLocked()) return;
     const point = dragPoint(event);
     if (!point) return;
     if (point.family === 'pointer') lastPointerDragAt = Date.now();
@@ -3575,6 +3586,13 @@
   }
 
   function moveCandidateDrag(event) {
+    if (pocketCaptureLocked()) {
+      if (candidateDrag) {
+        candidateDrag = null;
+        pocket?.host?.classList.remove('drop-ready', 'drop-hover');
+      }
+      return;
+    }
     const point = dragPoint(event);
     if (!candidateDrag || !point || candidateDrag.id !== point.id) return;
     if (Math.hypot(point.clientX - candidateDrag.startX, point.clientY - candidateDrag.startY) > 6) candidateDrag.moved = true;
