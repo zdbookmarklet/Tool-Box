@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.19';
+  const BUILD_VERSION='2.0.0-alpha.20';
   // Each cross-origin Zeta chat iframe owns its own DOM. A small frame agent
   // reports candidates and performs clicks locally; the parent owns the UI.
   const BRIDGE='zd-toolbox-frame-v1';
@@ -259,17 +259,19 @@
     button.classList.toggle('locked',state.locked);
     list.replaceChildren();
     shadow.querySelector('.context-menu')?.remove();
-    const editBtn=shadow.querySelector('.editmode');if(editBtn)editBtn.textContent=editMode?'완료':'편집';
+    const editBtn=shadow.querySelector('.editmode');if(editBtn)editBtn.textContent=editMode?'완료':'정리';
+    const lockBtn=shadow.querySelector('.toggle');if(lockBtn)lockBtn.textContent=state.locked?'🔒 잠금 해제':'🔓 수납 중';
+    const count=shadow.querySelector('.tool-count');if(count)count.textContent=state.items.length+'개';
     const add=(label,action,kind,item=null)=>{
       const row=document.createElement('div');row.className='item';
       const run=document.createElement('button');run.className='run';
-      const glyph=document.createElement('span');glyph.className='tool-icon';glyph.textContent=item?.icon|| (kind==='SCRIPT'?'🧩':kind==='BM'?'🔖':kind==='설치'?'📥':kind==='코드'?'📝':'＋');
+      const glyph=document.createElement('span');glyph.className='tool-icon';glyph.textContent=item?.icon&&item.icon!=='🧩'?item.icon:(kind==='SCRIPT'?'⚙️':kind==='BM'?'🔖':kind==='설치'?'📥':kind==='코드'?'📝':'＋');
       const name=document.createElement('span');name.className='tool-name';name.textContent=label;
       run.append(glyph,name);run.addEventListener('click',action);row.append(run);list.append(row);return row;
     };
     const groups=[...new Set(state.items.map(x=>x.category||'기본'))];
     for(const category of groups){
-      const heading=document.createElement('div');heading.className='category-heading';heading.textContent=category;list.append(heading);
+      const heading=document.createElement('div');heading.className='category-heading';const title=document.createElement('span');title.textContent=category;const num=document.createElement('span');num.className='category-count';num.textContent=state.items.filter(x=>(x.category||'기본')===category).length;heading.append(title,num);list.append(heading);
       for(const item of state.items.filter(x=>(x.category||'기본')===category)){
         const row=add(item.name,()=>{
           if(item.type==='url')openInstall(item.url);
@@ -325,13 +327,14 @@
     if(!state.locked&&!RECOVERY_MODE){
       for(const [key,c] of remoteCandidates){
         if(state.items.some(x=>x.type==='remote'&&x.frameId===c.frameId&&x.remoteId===c.remoteId))continue;
-        const row=add(c.label,()=>{state.items.push({id:'remote-'+Date.now(),type:'remote',frameId:c.frameId,remoteId:c.remoteId,name:c.label,icon:'🧩',category:'기본'});save();syncRemote();render()},'추가 +');
+        const friendly=c.remoteId==='zeta-rules-v3'?'대체어':c.label;
+        const row=add(friendly,()=>{state.items.push({id:'remote-'+Date.now(),type:'remote',frameId:c.frameId,remoteId:c.remoteId,name:friendly,icon:c.remoteId==='zeta-rules-v3'?'🧪':'⚙️',category:'기본'});save();syncRemote();render()},'추가 +');
         row.classList.add('candidate');
       }
       collect();
       for(const [selector,c] of candidates){
         if(isSelfItem({type:'script',name:c.label,selector})||state.items.some(x=>x.selector===selector))continue;
-        const row=add(c.label,()=>{state.items.push({id:'script-'+Date.now(),type:'script',name:c.label,selector,safeCapture:true,icon:'🧩',category:'기본'});save();applyPinned();render()},'추가 +');
+        const row=add(c.label,()=>{state.items.push({id:'script-'+Date.now(),type:'script',name:c.label,selector,safeCapture:true,icon:'⚙️',category:'기본'});save();applyPinned();render()},'추가 +');
         row.classList.add('candidate');
       }
     }
@@ -399,25 +402,25 @@
       *{box-sizing:border-box}button,input{font:inherit}
       .launcher{position:fixed;left:calc(100vw - 64px);top:50vh;width:34px;height:34px;display:grid;place-items:center;border:1px solid #b7cdaa;border-radius:15px;background:#e4f1da;color:#719a5c;box-shadow:0 5px 18px #35473530;pointer-events:auto;touch-action:none;cursor:grab}
       .launcher.locked{background:#ebebeb;color:#929292;border-color:#d1d1d1}
-      .panel{position:fixed;display:none;width:320px;height:410px;min-width:260px;min-height:230px;max-width:95vw;max-height:85vh;background:rgba(247,250,245,.97);border:1px solid #d9e5d4;border-radius:25px;box-shadow:0 18px 50px #203a2c38;pointer-events:auto;overflow:hidden;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+      .panel{position:fixed;display:none;width:320px;height:410px;min-width:260px;min-height:230px;max-width:95vw;max-height:85vh;background:#fff;border:1px solid #e3e8e1;border-radius:19px;box-shadow:0 16px 44px #253d2c25;pointer-events:auto;overflow:hidden}
       .panel.open{display:flex;flex-direction:column}
-      .head{display:flex;align-items:center;gap:10px;padding:16px 14px 13px;background:#f4f8f0;border-bottom:1px solid #e2eadf}
-      .brand{font-size:16px;font-weight:800;letter-spacing:-.4px}.head>div:first-child{min-width:0;flex:1}.editmode{border:0;background:#e6efe0;border-radius:9px;padding:7px 9px;color:#57724e;font-size:11px;font-weight:700;cursor:pointer}.item.dragging{opacity:.5}.item.editing .run{outline:2px solid #9bb993}.context-menu{position:absolute;z-index:6;min-width:145px;background:#fff;border:1px solid #d8e5d1;border-radius:14px;box-shadow:0 8px 25px #0002;padding:5px;display:flex;flex-direction:column}.context-menu button{border:0;background:transparent;color:#40543e;text-align:left;padding:10px;border-radius:8px;font-size:12px}.context-menu button:active{background:#edf5e9}.build{font-size:9px;font-weight:700;color:#91a48c;letter-spacing:0}.status{font-size:10px;color:#8b9e86;margin-top:3px}
+      .head{display:flex;align-items:center;gap:8px;padding:12px 12px 11px;background:#fff;border-bottom:1px solid #e9eee7}
+      .brand{font-size:17px;font-weight:800;letter-spacing:-.5px}.head>div:first-child{min-width:0;flex:1}.editmode{border:0;background:#eff5eb;border-radius:9px;padding:8px 10px;color:#507449;font-size:11px;font-weight:750;cursor:pointer}.item.dragging{opacity:.5}.item.editing .run{outline:2px solid #9bb993}.context-menu{position:absolute;z-index:6;min-width:145px;background:#fff;border:1px solid #d8e5d1;border-radius:14px;box-shadow:0 8px 25px #0002;padding:5px;display:flex;flex-direction:column}.context-menu button{border:0;background:transparent;color:#40543e;text-align:left;padding:10px;border-radius:8px;font-size:12px}.context-menu button:active{background:#edf5e9}.tool-count{font-size:10px;color:#96a994;font-weight:700;margin-left:3px}.build{font-size:9px;font-weight:700;color:#91a48c;letter-spacing:0}.status{font-size:10px;color:#8b9e86;margin-top:3px}
       .tool-actions{display:none}.close,.remove{border:0;background:transparent;color:#799274;cursor:pointer;font-size:20px}
-      .close{margin-left:auto;width:30px;height:30px;border-radius:10px;background:#e7efe2}
-      .tools{flex:1;min-height:0;overflow:auto;padding:15px 12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:10px 8px;overscroll-behavior:contain}
-      .category-heading{grid-column:1/-1;font-size:11px;font-weight:800;color:#82987a;letter-spacing:.02em;padding:5px 3px 0;border-bottom:1px solid #e5ede1;padding-bottom:7px}.item{position:relative;min-width:0}
-      .run{width:100%;min-height:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border:1px solid #e0e9dc;border-radius:17px;background:#fff;color:#40543e;cursor:pointer;padding:10px 5px;box-shadow:0 2px 6px #3c5a3310}
+      .close{margin-left:0;width:30px;height:30px;border-radius:9px;background:#f0f3ef}
+      .tools{flex:1;min-height:0;overflow:auto;padding:10px 10px 16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:9px 8px;overscroll-behavior:contain}
+      .category-heading{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:800;color:#6b8068;padding:11px 4px 8px;border-bottom:1px solid #e8ede6;margin-bottom:1px}.category-count{font-size:11px;color:#9ca89a;font-weight:700}.item{position:relative;min-width:0}
+      .run{width:100%;min-height:78px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;border:1px solid #e6eae4;border-radius:15px;background:#fff;color:#344435;cursor:pointer;padding:10px 4px;box-shadow:0 2px 7px #263e2810}
       .run:active{transform:scale(.97);background:#edf5e9}
-      .tool-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:#e8f1e3;font-size:17px;line-height:1}
-      .tool-name{width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:10px;font-weight:700}
+      .tool-icon{display:grid;place-items:center;width:33px;height:33px;border-radius:10px;background:#f0f5ed;font-size:21px;line-height:1}
+      .tool-name{width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:11px;font-weight:750}
       .remove{position:absolute;top:-5px;right:-4px;width:19px;height:19px;border-radius:50%;background:#d67b7b;color:#fff;font-size:15px;line-height:19px;box-shadow:0 1px 4px #0002}
       .candidate .run{border-style:dashed;background:#f4f9f0}.candidate .tool-icon{background:#deedda}
       .empty{grid-column:1/-1;text-align:center;color:#8b9a86;padding:36px 0;font-size:12px}
-      .bottom{padding:10px 12px 14px;border-top:1px solid #e5ede1;display:flex;flex-wrap:wrap;gap:6px;background:#f8faf6}
-      .bottom button{flex:1;white-space:nowrap;border:1px solid #d7e5d0;border-radius:11px;background:#edf5e8;color:#5b7d4d;padding:9px 5px;cursor:pointer;font-size:11px;font-weight:700}
+      .bottom{padding:9px 10px 11px;border-top:1px solid #e9eee7;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:#fff}.bottom .pick{grid-column:1/-1}
+      .bottom button{min-width:0;white-space:nowrap;border:1px solid #e0e9dc;border-radius:9px;background:#f3f8ef;color:#57774f;padding:9px 3px;cursor:pointer;font-size:10px;font-weight:750}.bottom .pick{background:#fff;border-style:dashed}
       .manager{position:absolute;inset:0;background:#172d1a55;display:flex;align-items:center;justify-content:center;padding:12px;z-index:3}.manager-card{background:white;border-radius:14px;width:100%;max-height:100%;overflow:auto;padding:15px;box-shadow:0 8px 30px #182e1b30}.manager-title{font-weight:750;font-size:15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.manager-close{border:0;background:transparent;font-size:21px;color:#82947a}.manager-card label{display:block;font-size:12px;color:#587052;margin:10px 0}.manager-card input,.manager-card select,.manager-card textarea{display:block;width:100%;border:1px solid #d5e5ce;border-radius:8px;padding:9px;margin-top:5px;background:#fff;color:#334b35;font-size:12px}.manager-card textarea{resize:vertical;min-height:75px}.manager-help{font-size:11px;line-height:1.5;color:#778a70}.manager-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}.manager-actions button{border:1px solid #d5e5ce;background:#eaf4e5;border-radius:8px;padding:8px 12px;color:#527b43}.grip{position:absolute;right:5px;bottom:5px;width:22px;height:22px;cursor:nwse-resize;touch-action:none;opacity:.55;background:repeating-linear-gradient(135deg,transparent 0 5px,#94ad89 5px 6px,transparent 6px 9px);clip-path:polygon(100% 0,100% 100%,0 100%)}
-    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox</div><div class="status"></div></div><button class="editmode" aria-label="편집 모드">편집</button><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">수납 모드 전환</button><button class="pick">+ 화면에서 선택</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
+    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox <span class="tool-count"></span></div><div class="status"></div></div><button class="editmode" aria-label="편집 모드">편집</button><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">🔓 수납 중</button><button class="pick">+ 화면에서 선택</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
     shadow.querySelector('.status').title=BUILD_VERSION;
     button=shadow.querySelector('.launcher');button.title='Toolbox '+BUILD_VERSION;panel=shadow.querySelector('.panel');list=shadow.querySelector('.tools');status=shadow.querySelector('.status');grip=shadow.querySelector('.grip');
     // Never trust a persisted position without checking the current viewport.
