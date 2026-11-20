@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const BUILD_VERSION='2.0.0-alpha.23';
+  const BUILD_VERSION='2.0.0-alpha.24';
   // Each cross-origin Zeta chat iframe owns its own DOM. A small frame agent
   // reports candidates and performs clicks locally; the parent owns the UI.
   const BRIDGE='zd-toolbox-frame-v1';
@@ -315,12 +315,14 @@
     panel.append(wrap);
   }
   let editMode=false;
+  let showDiscovery=false;
   function render(){
     status.textContent=state.locked?'수납 잠금':'수납 활성';
     button.classList.toggle('locked',state.locked);
     list.replaceChildren();
     shadow.querySelector('.context-menu')?.remove();
     const editBtn=shadow.querySelector('.editmode');if(editBtn)editBtn.textContent=editMode?'완료':'정리';
+    const discoveryBtn=shadow.querySelector('.discover');if(discoveryBtn)discoveryBtn.textContent=showDiscovery?'도구 찾기 닫기':'＋ 도구 찾기';
     const lockBtn=shadow.querySelector('.toggle');if(lockBtn)lockBtn.textContent=state.locked?'🔒 잠금 해제':'🔓 수납 중';
     const count=shadow.querySelector('.tool-count');if(count)count.textContent=state.items.length+'개';
     const add=(label,action,kind,item=null)=>{
@@ -384,8 +386,8 @@
 
       }
     }
-    if(!state.items.length){const empty=document.createElement('p');empty.className='empty';empty.textContent='아직 담긴 도구가 없습니다';list.append(empty)}
-    if(!state.locked&&!RECOVERY_MODE){
+    if(!state.items.length&&!showDiscovery){const empty=document.createElement('p');empty.className='empty';empty.textContent='아직 담긴 도구가 없습니다';list.append(empty)}
+    if(showDiscovery&&!state.locked&&!RECOVERY_MODE){
       for(const [key,c] of remoteCandidates){
         if(state.items.some(x=>x.type==='remote'&&x.frameId===c.frameId&&x.remoteId===c.remoteId))continue;
         const friendly=c.remoteId==='zeta-rules-v3'?'대체어':c.label;
@@ -479,9 +481,9 @@
       .candidate .run{border-style:dashed;background:#f4f9f0}.candidate .tool-icon{background:#deedda}
       .empty{grid-column:1/-1;text-align:center;color:#8b9a86;padding:36px 0;font-size:12px}
       .bottom{padding:9px 10px 11px;border-top:1px solid #e9eee7;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:#fff}.bottom .pick{grid-column:1/-1}
-      .bottom button{min-width:0;white-space:nowrap;border:1px solid #e0e9dc;border-radius:9px;background:#f3f8ef;color:#57774f;padding:9px 3px;cursor:pointer;font-size:10px;font-weight:750}.bottom .pick{background:#fff;border-style:dashed}
+      .bottom button{min-width:0;white-space:nowrap;border:1px solid #e0e9dc;border-radius:9px;background:#f3f8ef;color:#57774f;padding:9px 3px;cursor:pointer;font-size:10px;font-weight:750}.bottom .pick{background:#fff;border-style:dashed}.bottom .discover{grid-column:1/-1;background:#fff;border-style:dashed}
       .manager{position:absolute;inset:0;background:#172d1a55;display:flex;align-items:center;justify-content:center;padding:12px;z-index:3}.manager-card{background:white;border-radius:14px;width:100%;max-height:100%;overflow:auto;padding:15px;box-shadow:0 8px 30px #182e1b30}.manager-title{font-weight:750;font-size:15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.manager-close{border:0;background:transparent;font-size:21px;color:#82947a}.manager-card label{display:block;font-size:12px;color:#587052;margin:10px 0}.manager-card input,.manager-card select,.manager-card textarea{display:block;width:100%;border:1px solid #d5e5ce;border-radius:8px;padding:9px;margin-top:5px;background:#fff;color:#334b35;font-size:12px}.manager-card textarea{resize:vertical;min-height:75px}.manager-help{font-size:11px;line-height:1.5;color:#778a70}.manager-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}.manager-actions button{border:1px solid #d5e5ce;background:#eaf4e5;border-radius:8px;padding:8px 12px;color:#527b43}.grip{position:absolute;right:5px;bottom:5px;width:22px;height:22px;cursor:nwse-resize;touch-action:none;opacity:.55;background:repeating-linear-gradient(135deg,transparent 0 5px,#94ad89 5px 6px,transparent 6px 9px);clip-path:polygon(100% 0,100% 100%,0 100%)}
-    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox <span class="tool-count"></span><span class="version-mark"></span></div><div class="status"></div></div><button class="editmode" aria-label="편집 모드">편집</button><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">🔓 수납 중</button><button class="pick">+ 화면에서 선택</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
+    </style><button class="launcher" aria-label="Toolbox 열기">${icon}</button><section class="panel"><div class="head"><div><div class="brand">Toolbox <span class="tool-count"></span><span class="version-mark"></span></div><div class="status"></div></div><button class="editmode" aria-label="편집 모드">편집</button><button class="close" aria-label="닫기">×</button></div><div class="tools"></div><div class="bottom"><button class="addscript">+ 유저스크립트</button><button class="addbm">+ 북마클릿</button><button class="toggle">🔓 수납 중</button><button class="discover">＋ 도구 찾기</button><button class="pick">+ 화면에서 선택</button></div><div class="grip" aria-label="크기 조절"></div></section>`;
     shadow.querySelector('.status').title=BUILD_VERSION;shadow.querySelector('.version-mark').textContent='v'+BUILD_VERSION;
     button=shadow.querySelector('.launcher');button.title='Toolbox '+BUILD_VERSION;panel=shadow.querySelector('.panel');list=shadow.querySelector('.tools');status=shadow.querySelector('.status');grip=shadow.querySelector('.grip');
     // Never trust a persisted position without checking the current viewport.
@@ -509,6 +511,7 @@
     shadow.querySelector('.toggle').onclick=toggle;
     shadow.querySelector('.addscript').onclick=()=>openManager('script');
     shadow.querySelector('.addbm').onclick=()=>openManager('bookmarklet');
+    shadow.querySelector('.discover').onclick=()=>{showDiscovery=!showDiscovery;if(showDiscovery)collect();render()};
     // Fallback for launchers that cannot be discovered by heuristic scans.
     let pickMode=false;
     const pickButton=shadow.querySelector('.pick');
