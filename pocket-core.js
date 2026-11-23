@@ -1,7 +1,7 @@
 // ==PocketCore==
 // @name         Zeta 화면 보정 + 도구 주머니
 // @namespace    zeta-screen-kit
-// @version      1.1.65
+// @version      1.1.66
 // @description  제타 화면·키보드를 보정하고 플로팅 도구와 직접 저장한 북마클릿을 주머니에 담습니다.
 // @match        https://zeta-ai.io/ko
 // @match        https://zeta-ai.io/ko/*
@@ -16,7 +16,7 @@
 
   const w = window;
   const d = document;
-  const VERSION = '1.1.65';
+  const VERSION = '1.1.66';
   const INSTANCE_KEY = '__ZETA_FULLSCREEN_TOOL_POCKET__';
   const RUNTIME_UPDATE_KEY = '__ZETA_SCREEN_KIT_ALL_UPDATE__';
   const RUNTIME_SOURCE_URL = 'https://zetdal-screen-kit.netlify.app/all.js';
@@ -3437,7 +3437,9 @@
           }
         }
       }
+      customizations[customizationKey(editing.actionID, editing.childID)] = { label, icon };
       persistCustomizations();
+      if (isSavedBookmarklet) registerSavedBookmarklets();
       const wasChild = Boolean(editing.childID);
       refreshEditedView(true);
       closeEditor();
