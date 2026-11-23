@@ -1,7 +1,7 @@
 // ==PocketCore==
 // @name         Zeta 화면 보정 + 도구 주머니
 // @namespace    zeta-screen-kit
-// @version      1.1.63
+// @version      1.1.64
 // @description  제타 화면·키보드를 보정하고 플로팅 도구와 직접 저장한 북마클릿을 주머니에 담습니다.
 // @match        https://zeta-ai.io/ko
 // @match        https://zeta-ai.io/ko/*
@@ -16,7 +16,7 @@
 
   const w = window;
   const d = document;
-  const VERSION = '1.1.63';
+  const VERSION = '1.1.64';
   const INSTANCE_KEY = '__ZETA_FULLSCREEN_TOOL_POCKET__';
   const RUNTIME_UPDATE_KEY = '__ZETA_SCREEN_KIT_ALL_UPDATE__';
   const RUNTIME_SOURCE_URL = 'https://zetdal-screen-kit.netlify.app/all.js';
@@ -2784,26 +2784,29 @@
       node.addEventListener('pointerdown',e=>{
         if(!managing||(e.pointerType!=='touch'&&e.button!==0))return;
         press={id:e.pointerId,x:e.clientX,y:e.clientY,ready:false,target:null};
-        timer=w.setTimeout(()=>{if(!press)return;press.ready=true;node.style.opacity='.5';try{node.setPointerCapture(press.id)}catch(_){}},420);
+        timer=w.setTimeout(()=>{if(!press)return;press.ready=true;node.style.opacity='.5';try{node.setPointerCapture(press.id)}catch(_){}},220);
       },true);
       node.addEventListener('pointermove',e=>{
         if(!press||press.id!==e.pointerId)return;
         if(!press.ready&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>9){stop();press=null;return}
         if(!press.ready)return;
         e.preventDefault();
+        node.style.transform='translate('+(e.clientX-press.x)+'px,'+(e.clientY-press.y)+'px)';
         const selector=kind==='group'?'[data-pocket-group]':'[data-pocket-item]';
-        const target=shadow.elementFromPoint(e.clientX,e.clientY)?.closest(selector);
+        const target=[...shadow.querySelectorAll(selector)].filter(el=>el!==node).map(el=>{const r=el.getBoundingClientRect();return {el,dist:Math.hypot(Math.max(r.left-e.clientX,0,e.clientX-r.right),Math.max(r.top-e.clientY,0,e.clientY-r.bottom))}}).sort((a,b)=>a.dist-b.dist)[0]?.el;
         if(target&&target!==node)press.target=kind==='group'?target.dataset.pocketGroup:target.dataset.pocketItem;
       },true);
       const finish=e=>{
         if(!press||press.id!==e.pointerId)return;
-        stop();const {ready,target}=press;press=null;node.style.opacity='';
+        stop();const {ready,target}=press;press=null;node.style.opacity='';node.style.transform='';
         if(!ready)return;
         e.preventDefault();e.stopPropagation();
         if(target)moveLayout(id,target,kind);
       };
       node.addEventListener('pointerup',finish,true);
       node.addEventListener('pointercancel',finish,true);
+      node.style.userSelect='none';node.style.webkitUserSelect='none';node.style.webkitTouchCallout='none';
+      node.addEventListener('contextmenu',e=>{if(managing)e.preventDefault()},true);
     };
 
     const readPosition = () => {
@@ -3115,7 +3118,7 @@
         title.firstElementChild.textContent = group;
         title.lastElementChild.textContent = `${items.length}`;
         title.dataset.pocketGroup=group;
-        if(managing){title.style.touchAction='none';bindReorder(title,group,'group')}
+        if(managing){title.style.touchAction='none';bindReorder(title,group,'group');const controls=d.createElement('span');controls.style.cssText='display:inline-flex;gap:4px;margin-left:auto';for(const [glyph,dir] of [['↑',-1],['↓',1]]){const btn=d.createElement('button');btn.type='button';btn.textContent=glyph;btn.style.cssText='min-width:30px;min-height:30px;border:1px solid #cadaca;border-radius:7px;background:white;color:#456b45;font-size:16px';btn.addEventListener('pointerdown',e=>e.stopPropagation());btn.addEventListener('click',e=>{e.stopPropagation();const names=[...layout.groups],i=names.indexOf(group),j=i+dir;if(j<0||j>=names.length)return;[names[i],names[j]]=[names[j],names[i]];layout.groups=names;saveLayout();render()});controls.appendChild(btn)}title.appendChild(controls)}
         const grid = d.createElement('div');
         grid.className = 'grid';
         items.forEach(action => {
