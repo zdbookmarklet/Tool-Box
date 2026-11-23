@@ -1,7 +1,7 @@
 // ==PocketCore==
 // @name         Zeta 화면 보정 + 도구 주머니
 // @namespace    zeta-screen-kit
-// @version      1.1.61
+// @version      1.1.62
 // @description  제타 화면·키보드를 보정하고 플로팅 도구와 직접 저장한 북마클릿을 주머니에 담습니다.
 // @match        https://zeta-ai.io/ko
 // @match        https://zeta-ai.io/ko/*
@@ -16,7 +16,7 @@
 
   const w = window;
   const d = document;
-  const VERSION = '1.1.61';
+  const VERSION = '1.1.62';
   const INSTANCE_KEY = '__ZETA_FULLSCREEN_TOOL_POCKET__';
   const RUNTIME_UPDATE_KEY = '__ZETA_SCREEN_KIT_ALL_UPDATE__';
   const RUNTIME_SOURCE_URL = 'https://zetdal-screen-kit.netlify.app/all.js';
@@ -2650,7 +2650,7 @@
         .remove{position:absolute;right:-4px;top:-5px;display:none;place-items:center;width:23px;height:23px;padding:0;border:2px solid #18181d;border-radius:999px;background:#ff5c67;color:#fff;font-size:16px;font-weight:800;line-height:1;box-shadow:0 3px 8px rgba(0,0,0,.28);cursor:pointer}
         :host(.managing) .tool{opacity:.62}:host(.managing) .tool-wrap.removable .remove{display:grid}:host(.renaming) .tool{border-color:rgba(145,120,255,.46);background:rgba(124,92,255,.13)}
         .subnav{display:flex;align-items:center;gap:8px;width:100%;margin:0 0 12px;padding:9px 11px;border:1px solid rgba(255,255,255,.075);border-radius:12px;background:rgba(255,255,255,.05);color:#f7f7f9;font-size:11px;font-weight:800;text-align:left;cursor:pointer}.subnav span{color:rgba(255,255,255,.52);font-size:17px;line-height:1}
-        .editor[hidden]{display:none!important}.editor{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:18px;background:rgba(10,10,13,.72);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}.editor-card{width:min(286px,100%);max-height:calc(100% - 8px);overflow:auto;padding:17px;border:1px solid rgba(255,255,255,.12);border-radius:18px;background:#25252b;box-shadow:0 18px 46px rgba(0,0,0,.4)}.editor-title{margin-bottom:14px;font-size:14px;font-weight:850}.editor-row{display:grid;grid-template-columns:66px 1fr;align-items:center;gap:9px;margin-top:9px;color:rgba(255,255,255,.66);font-size:10px;font-weight:750}.editor input,.editor textarea{min-width:0;width:100%;padding:0 11px;border:1px solid rgba(255,255,255,.12);border-radius:10px;outline:0;background:rgba(255,255,255,.07);color:#fff;font:700 13px/1.35 inherit}.editor input{height:38px}.editor textarea{height:138px;padding:10px;resize:vertical;font-size:10px}.editor input:focus,.editor textarea:focus{border-color:rgba(145,120,255,.72);box-shadow:0 0 0 3px rgba(124,92,255,.14)}.editor-help{margin-top:9px;color:rgba(255,255,255,.48);font-size:9px;line-height:1.45}.editor-sync{display:flex;gap:7px;margin-top:11px}.editor-sync button{flex:1;height:32px;border:0;border-radius:9px;background:rgba(255,255,255,.07);color:rgba(255,255,255,.72);font-size:9px;font-weight:800}.editor-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:15px}.editor-actions button{height:34px;padding:0 11px;border:0;border-radius:10px;background:rgba(255,255,255,.08);color:#fff;font-size:10px;font-weight:800;cursor:pointer}.editor-actions .editor-save{background:#6850df}.editor-actions .editor-reset{margin-right:auto;color:rgba(255,255,255,.62)}
+        .editor[hidden]{display:none!important}.editor{position:absolute;inset:0;z-index:5;display:grid;place-items:center;padding:18px;background:rgba(10,10,13,.72);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}.editor-card{width:min(286px,100%);max-height:calc(100% - 8px);overflow:auto;padding:17px;border:1px solid rgba(255,255,255,.12);border-radius:18px;background:#25252b;box-shadow:0 18px 46px rgba(0,0,0,.4)}.editor-title{margin-bottom:14px;font-size:14px;font-weight:850}.editor-row{display:grid;grid-template-columns:66px 1fr;align-items:center;gap:9px;margin-top:9px;color:rgba(255,255,255,.66);font-size:10px;font-weight:750}.editor input,.editor textarea{min-width:0;width:100%;padding:0 11px;border:1px solid rgba(255,255,255,.12);border-radius:10px;outline:0;background:rgba(255,255,255,.07);color:#fff;font:700 13px/1.35 inherit}.editor input{height:38px}.editor textarea{height:138px;padding:10px;resize:vertical;font-size:10px}.editor-code-row[hidden]{display:none!important}.editor-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace!important;line-height:1.5!important;tab-size:2}.editor input:focus,.editor textarea:focus{border-color:rgba(145,120,255,.72);box-shadow:0 0 0 3px rgba(124,92,255,.14)}.editor-help{margin-top:9px;color:rgba(255,255,255,.48);font-size:9px;line-height:1.45}.editor-sync{display:flex;gap:7px;margin-top:11px}.editor-sync button{flex:1;height:32px;border:0;border-radius:9px;background:rgba(255,255,255,.07);color:rgba(255,255,255,.72);font-size:9px;font-weight:800}.editor-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:15px}.editor-actions button{height:34px;padding:0 11px;border:0;border-radius:10px;background:rgba(255,255,255,.08);color:#fff;font-size:10px;font-weight:800;cursor:pointer}.editor-actions .editor-save{background:#6850df}.editor-actions .editor-reset{margin-right:auto;color:rgba(255,255,255,.62)}
         .empty{padding:30px 15px;text-align:center;color:rgba(255,255,255,.5);font-size:12px;line-height:1.6}
         .toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom));max-width:calc(100vw - 32px);padding:10px 14px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(25,25,30,.94);color:#fff;font-size:11px;font-weight:700;white-space:nowrap;opacity:0;transform:translate(-50%,8px);transition:opacity .18s ease,transform .18s ease;pointer-events:none}
         :host(.open) .scrim{opacity:1;pointer-events:auto}:host(.open) .panel{opacity:1;transform:none;pointer-events:auto}:host(.open) .launcher{opacity:0;pointer-events:none}
@@ -2688,7 +2688,7 @@
       <section class="panel" role="dialog" aria-modal="true" aria-label="도구 주머니" aria-hidden="true">
         <header class="head"><div class="mark">✦</div><div class="titles"><div class="title-row"><div class="title">Toolbox</div><span class="version">v${VERSION}</span></div><div class="subtitle">도구를 한곳에 깔끔하게</div></div><button class="manage" type="button">정리</button><button class="rename" type="button">이름 바꾸기</button><button class="add" type="button" aria-label="북마클릿 직접 추가" title="북마클릿 직접 추가">＋</button><button class="close" type="button" aria-label="닫기">×</button></header>
         <div class="scroll"></div>
-        <form class="editor rename-editor" hidden><div class="editor-card"><div class="editor-title">이름과 아이콘 바꾸기</div><label class="editor-row"><span>이름</span><input class="editor-name" type="text" maxlength="32" autocomplete="off"></label><label class="editor-row"><span>아이콘</span><input class="editor-icon" type="text" maxlength="12" autocomplete="off" inputmode="text"></label><div class="editor-actions"><button class="editor-reset" type="button">기본값</button><button class="editor-cancel" type="button">취소</button><button class="editor-save" type="submit">저장</button></div></div></form>
+        <form class="editor rename-editor" hidden><div class="editor-card"><div class="editor-title">이름과 아이콘 바꾸기</div><label class="editor-row"><span>이름</span><input class="editor-name" type="text" maxlength="32" autocomplete="off"></label><label class="editor-row"><span>아이콘</span><input class="editor-icon" type="text" maxlength="12" autocomplete="off" inputmode="text"></label><label class="editor-row editor-code-row" hidden><span>코드</span><textarea class="editor-code" spellcheck="false" placeholder="javascript:로 시작하는 북마클릿 코드"></textarea></label><div class="editor-actions"><button class="editor-reset" type="button">기본값</button><button class="editor-cancel" type="button">취소</button><button class="editor-save" type="submit">저장</button></div></div></form>
         <form class="editor bookmarklet-editor" hidden><div class="editor-card"><div class="editor-title">북마클릿 직접 추가</div><label class="editor-row"><span>이름</span><input class="bookmarklet-name" type="text" maxlength="32" autocomplete="off"></label><label class="editor-row"><span>아이콘</span><input class="bookmarklet-icon" type="text" maxlength="12" autocomplete="off" value="🔖"></label><label class="editor-row"><span>코드</span><textarea class="bookmarklet-code" spellcheck="false" placeholder="javascript:로 시작하는 코드를 붙여넣으세요"></textarea></label><div class="editor-help">새 플로팅 아이콘을 만드는 북마클릿은 아이콘까지 자동으로 눌러 열고, 바깥 아이콘은 주머니 안에 숨깁니다.</div><div class="editor-sync"><button class="bookmarklet-backup" type="button">백업 복사</button><button class="bookmarklet-restore" type="button">백업 불러오기</button></div><div class="editor-actions"><button class="bookmarklet-cancel" type="button">취소</button><button class="editor-save" type="submit">추가</button></div></div></form>
       </section>
       <button class="launcher" type="button" aria-label="빈 도구 주머니 열기" aria-expanded="false">
@@ -2715,6 +2715,8 @@
     const editorTitle = shadow.querySelector('.editor-title');
     const editorName = shadow.querySelector('.editor-name');
     const editorIcon = shadow.querySelector('.editor-icon');
+    const editorCodeRow = shadow.querySelector('.editor-code-row');
+    const editorCode = shadow.querySelector('.editor-code');
     const bookmarkletEditor = shadow.querySelector('.bookmarklet-editor');
     const bookmarkletName = shadow.querySelector('.bookmarklet-name');
     const bookmarkletIcon = shadow.querySelector('.bookmarklet-icon');
@@ -2860,7 +2862,10 @@
       const item = child || action;
       const shown = presentation(item, child ? action.id : '');
       editing = { actionID: action.id, childID: child?.id || '', base: item };
-      editorTitle.textContent = child ? `${presentation(action).label} 기능 꾸미기` : '도구 이름과 아이콘 바꾸기';
+      const bookmarklet = !child && action.id.startsWith('bookmarklet:') ? savedBookmarklets.find(entry => entry.id === action.id) : null;
+      editorTitle.textContent = bookmarklet ? '북마클릿 이름·아이콘·코드 수정' : child ? `${presentation(action).label} 기능 꾸미기` : '도구 이름과 아이콘 바꾸기';
+      editorCodeRow.hidden = !bookmarklet;
+      editorCode.value = bookmarklet?.code || '';
       editorName.value = shown.label;
       editorIcon.value = shown.icon;
       editor.hidden = false;
@@ -3298,7 +3303,9 @@
     shadow.querySelector('.editor-reset').addEventListener('click', () => {
       if (!editing) return;
       delete customizations[customizationKey(editing.actionID, editing.childID)];
+      customizations[customizationKey(editing.actionID, editing.childID)] = { label, icon };
       persistCustomizations();
+      if (isSavedBookmarklet) registerSavedBookmarklets();
       const wasChild = Boolean(editing.childID);
       refreshEditedView(true);
       closeEditor();
@@ -3310,19 +3317,26 @@
       await ensureBookmarkletStorageReady();
       const label = cleanText(editorName.value) || editing.base.label || '도구';
       const icon = cleanText(editorIcon.value) || editing.base.icon || iconFor(label);
-      customizations[customizationKey(editing.actionID, editing.childID)] = { label, icon };
+      const isSavedBookmarklet = !editing.childID && editing.actionID.startsWith('bookmarklet:');
+      const newCode = isSavedBookmarklet ? String(editorCode.value || '').trim() : '';
+      if (isSavedBookmarklet && !normalizeBookmarkletCode(newCode)) {
+        toast('북마클릿 코드를 입력해 주세요');
+        return;
+      }
       if (!editing.childID && editing.actionID.startsWith('bookmarklet:')) {
         const saved = savedBookmarklets.find(item => item.id === editing.actionID);
         if (saved) {
-          const previous = { label: saved.label, icon: saved.icon };
+          const previous = { label: saved.label, icon: saved.icon, code: saved.code };
           saved.label = label;
           saved.icon = icon;
+          saved.code = newCode;
           try { await persistSavedBookmarklets(); }
           catch (_) {
             saved.label = previous.label;
             saved.icon = previous.icon;
+            saved.code = previous.code;
             cacheSavedBookmarklets();
-            toast('북마클릿 이름을 저장하지 못했어요');
+            toast('북마클릿 변경사항을 저장하지 못했어요');
             return;
           }
         }
@@ -3331,7 +3345,7 @@
       const wasChild = Boolean(editing.childID);
       refreshEditedView(true);
       closeEditor();
-      toast(wasChild ? '기능 이름과 아이콘을 저장했어요' : '도구 이름과 아이콘을 저장했어요');
+      toast(isSavedBookmarklet ? '북마클릿 이름·아이콘·코드를 저장했어요' : wasChild ? '기능 이름과 아이콘을 저장했어요' : '도구 이름과 아이콘을 저장했어요');
     });
     shadow.querySelector('.bookmarklet-cancel').addEventListener('click', closeBookmarkletEditor);
     shadow.querySelector('.bookmarklet-backup').addEventListener('click', copyBookmarkletBackup);
