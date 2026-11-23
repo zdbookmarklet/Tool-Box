@@ -1,7 +1,7 @@
 // ==PocketCore==
 // @name         Zeta 화면 보정 + 도구 주머니
 // @namespace    zeta-screen-kit
-// @version      1.1.62
+// @version      1.1.63
 // @description  제타 화면·키보드를 보정하고 플로팅 도구와 직접 저장한 북마클릿을 주머니에 담습니다.
 // @match        https://zeta-ai.io/ko
 // @match        https://zeta-ai.io/ko/*
@@ -16,7 +16,7 @@
 
   const w = window;
   const d = document;
-  const VERSION = '1.1.62';
+  const VERSION = '1.1.63';
   const INSTANCE_KEY = '__ZETA_FULLSCREEN_TOOL_POCKET__';
   const RUNTIME_UPDATE_KEY = '__ZETA_SCREEN_KIT_ALL_UPDATE__';
   const RUNTIME_SOURCE_URL = 'https://zetdal-screen-kit.netlify.app/all.js';
@@ -27,6 +27,7 @@
   const PANEL_POSITION_KEY = 'zeta-tool-pocket-panel-position-v1';
   const SELECTION_KEY = 'zeta-tool-pocket-selected-v1';
   const CUSTOM_KEY = 'zeta-tool-pocket-custom-v1';
+  const LAYOUT_KEY = 'zeta-tool-pocket-layout-v1';
   const FINGERPRINT_KEY = 'zeta-tool-pocket-captured-fingerprints-v1';
   const BOOKMARKLETS_KEY = 'zeta-tool-pocket-bookmarklets-v1';
   const BOOKMARKLETS_DB_NAME = 'zeta-tool-pocket-db';
@@ -2749,6 +2750,61 @@
     let renaming = false;
     let editing = null;
     let toastTimer = 0;
+    let layout = {groups:[],items:{},categories:{}};
+    try { const saved=JSON.parse(localStorage.getItem(LAYOUT_KEY)||'{}'); layout={groups:Array.isArray(saved.groups)?saved.groups:[],items:saved.items||{},categories:saved.categories||{}}; } catch (_) {}
+    const saveLayout=()=>{try{localStorage.setItem(LAYOUT_KEY,JSON.stringify(layout))}catch(_){}};
+    const categoryOf=a=>layout.categories[a.id]||a.group;
+    const rememberGroup=g=>{if(!layout.groups.includes(g))layout.groups.push(g)};
+    const changeCategory=a=>{
+      const value=w.prompt('카테고리 이름 (기존: '+layout.groups.join(', ')+')',categoryOf(a));
+      if(value===null)return;
+      const name=value.trim().slice(0,40);
+      if(!name)return;
+      layout.categories[a.id]=name;rememberGroup(name);saveLayout();render();
+    };
+    const moveLayout=(from,to,kind)=>{
+      if(from===to)return;
+      if(kind==='group'){
+        const names=[...layout.groups],i=names.indexOf(from),j=names.indexOf(to);
+        if(i<0||j<0)return;
+        names.splice(i,1);names.splice(j,0,from);layout.groups=names;
+      }else{
+        const source=actions.get(from),target=actions.get(to);
+        if(!source||!target)return;
+        const group=categoryOf(target);layout.categories[from]=group;rememberGroup(group);
+        const sorted=[...actions.values()].filter(a=>a.id!==from&&categoryOf(a)===group).sort((a,b)=>(layout.items[a.id]??a.order)-(layout.items[b.id]??b.order));
+        const index=sorted.findIndex(a=>a.id===to);sorted.splice(Math.max(0,index),0,source);
+        sorted.forEach((a,i)=>layout.items[a.id]=i*100);
+      }
+      saveLayout();render();
+    };
+    const bindReorder=(node,id,kind)=>{
+      let press=null,timer=0;
+      const stop=()=>{clearTimeout(timer);timer=0};
+      node.addEventListener('pointerdown',e=>{
+        if(!managing||(e.pointerType!=='touch'&&e.button!==0))return;
+        press={id:e.pointerId,x:e.clientX,y:e.clientY,ready:false,target:null};
+        timer=w.setTimeout(()=>{if(!press)return;press.ready=true;node.style.opacity='.5';try{node.setPointerCapture(press.id)}catch(_){}},420);
+      },true);
+      node.addEventListener('pointermove',e=>{
+        if(!press||press.id!==e.pointerId)return;
+        if(!press.ready&&Math.hypot(e.clientX-press.x,e.clientY-press.y)>9){stop();press=null;return}
+        if(!press.ready)return;
+        e.preventDefault();
+        const selector=kind==='group'?'[data-pocket-group]':'[data-pocket-item]';
+        const target=shadow.elementFromPoint(e.clientX,e.clientY)?.closest(selector);
+        if(target&&target!==node)press.target=kind==='group'?target.dataset.pocketGroup:target.dataset.pocketItem;
+      },true);
+      const finish=e=>{
+        if(!press||press.id!==e.pointerId)return;
+        stop();const {ready,target}=press;press=null;node.style.opacity='';
+        if(!ready)return;
+        e.preventDefault();e.stopPropagation();
+        if(target)moveLayout(id,target,kind);
+      };
+      node.addEventListener('pointerup',finish,true);
+      node.addEventListener('pointercancel',finish,true);
+    };
 
     const readPosition = () => {
       try {
@@ -2970,16 +3026,17 @@
     function groupedActions() {
       const builtIn = [{ id: 'builtin:screen', label: '화면 다시 맞춤', icon: '↗', group: '화면', order: 0, run: requestScreenFit }];
       const current = [...builtIn, ...actions.values()].filter(action => !action.element || action.element.isConnected);
-      const groupOrder = new Map([['화면', 0], ['도구', 10], ['메모', 20], ['응답 검토', 30], ['기타', 90]]);
+      current.forEach(action=>rememberGroup(categoryOf(action)));
       current.sort((a, b) =>
-        (groupOrder.get(a.group) ?? 50) - (groupOrder.get(b.group) ?? 50) ||
-        a.order - b.order ||
+        layout.groups.indexOf(categoryOf(a)) - layout.groups.indexOf(categoryOf(b)) ||
+        (layout.items[a.id] ?? a.order) - (layout.items[b.id] ?? b.order) ||
         a.label.localeCompare(b.label, 'ko')
       );
       const groups = new Map();
       current.forEach(action => {
-        if (!groups.has(action.group)) groups.set(action.group, []);
-        groups.get(action.group).push(action);
+        const group=categoryOf(action);
+        if (!groups.has(group)) groups.set(group, []);
+        groups.get(group).push(action);
       });
       return groups;
     }
@@ -3057,6 +3114,8 @@
         title.innerHTML = `<span></span><span class="section-count"></span>`;
         title.firstElementChild.textContent = group;
         title.lastElementChild.textContent = `${items.length}`;
+        title.dataset.pocketGroup=group;
+        if(managing){title.style.touchAction='none';bindReorder(title,group,'group')}
         const grid = d.createElement('div');
         grid.className = 'grid';
         items.forEach(action => {
@@ -3066,6 +3125,8 @@
           const button = d.createElement('button');
           button.type = 'button';
           button.className = 'tool';
+          button.dataset.pocketItem=action.id;
+          if(managing){button.style.touchAction='none';bindReorder(button,action.id,'item')}
           button.title = shown.label;
           const icon = d.createElement('span');
           icon.className = 'tool-icon';
@@ -3105,6 +3166,12 @@
             requestAnimationFrame(() => syncViewport(false));
           });
           wrap.appendChild(button);
+          if(managing){
+            const cat=d.createElement('button');cat.type='button';cat.textContent='분류';
+            cat.style.cssText='position:absolute;left:0;bottom:-4px;z-index:2;border:1px solid #cbdac7;border-radius:7px;background:#fff;color:#52754d;font-size:9px;padding:3px 5px';
+            cat.addEventListener('click',e=>{e.stopPropagation();changeCategory(action)});
+            wrap.appendChild(cat);
+          }
           if (action.removable) {
             const remove = d.createElement('button');
             remove.type = 'button';
@@ -3293,7 +3360,7 @@
     shadow.querySelector('.scrim').addEventListener('click', close);
     shadow.querySelector('.close').addEventListener('click', close);
     manageButton.addEventListener('click', () => {
-      setMode(managing ? 'none' : 'manage');
+      setMode(managing ? 'none' : 'manage');render();
     });
     renameButton.addEventListener('click', () => {
       setMode(renaming ? 'none' : 'rename');
