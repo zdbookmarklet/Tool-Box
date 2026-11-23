@@ -1,7 +1,7 @@
 // ==PocketCore==
 // @name         Zeta 화면 보정 + 도구 주머니
 // @namespace    zeta-screen-kit
-// @version      1.1.64
+// @version      1.1.65
 // @description  제타 화면·키보드를 보정하고 플로팅 도구와 직접 저장한 북마클릿을 주머니에 담습니다.
 // @match        https://zeta-ai.io/ko
 // @match        https://zeta-ai.io/ko/*
@@ -16,7 +16,7 @@
 
   const w = window;
   const d = document;
-  const VERSION = '1.1.64';
+  const VERSION = '1.1.65';
   const INSTANCE_KEY = '__ZETA_FULLSCREEN_TOOL_POCKET__';
   const RUNTIME_UPDATE_KEY = '__ZETA_SCREEN_KIT_ALL_UPDATE__';
   const RUNTIME_SOURCE_URL = 'https://zetdal-screen-kit.netlify.app/all.js';
@@ -2756,11 +2756,37 @@
     const categoryOf=a=>layout.categories[a.id]||a.group;
     const rememberGroup=g=>{if(!layout.groups.includes(g))layout.groups.push(g)};
     const changeCategory=a=>{
-      const value=w.prompt('카테고리 이름 (기존: '+layout.groups.join(', ')+')',categoryOf(a));
-      if(value===null)return;
-      const name=value.trim().slice(0,40);
-      if(!name)return;
-      layout.categories[a.id]=name;rememberGroup(name);saveLayout();render();
+      shadow.querySelector('.category-picker-overlay')?.remove();
+      const overlay=d.createElement('div');
+      overlay.className='category-picker-overlay';
+      overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0005;display:grid;place-items:center;pointer-events:auto;padding:18px';
+      const dialog=d.createElement('div');
+      dialog.style.cssText='width:min(340px,100%);max-height:80vh;overflow:auto;background:#fff;color:#263a2a;border-radius:18px;padding:18px;box-shadow:0 15px 45px #0003;display:flex;flex-direction:column;gap:12px';
+      const heading=d.createElement('strong');heading.textContent='카테고리 설정';
+      const select=d.createElement('select');
+      select.style.cssText='width:100%;padding:12px;border:1px solid #cadaca;border-radius:10px;background:#fff;color:#263a2a;font-size:14px';
+      const groups=[...new Set([...layout.groups,categoryOf(a),...actions.values()].map(x=>typeof x==='string'?x:categoryOf(x)))];
+      groups.forEach(name=>{const opt=d.createElement('option');opt.value=name;opt.textContent=name;select.appendChild(opt)});
+      const NEW='__zeta_new_category__';
+      const newOption=d.createElement('option');newOption.value=NEW;newOption.textContent='＋ 새 카테고리 추가';select.appendChild(newOption);
+      select.value=categoryOf(a);
+      const input=d.createElement('input');input.type='text';input.maxLength=40;input.placeholder='새 카테고리 이름';
+      input.style.cssText='display:none;width:100%;padding:12px;border:1px solid #cadaca;border-radius:10px;background:#fff;color:#263a2a;font-size:14px';
+      select.addEventListener('change',()=>{input.style.display=select.value===NEW?'block':'none';if(select.value===NEW)input.focus()});
+      const actionsRow=d.createElement('div');actionsRow.style.cssText='display:flex;justify-content:flex-end;gap:8px';
+      const cancel=d.createElement('button');cancel.type='button';cancel.textContent='취소';
+      const save=d.createElement('button');save.type='button';save.textContent='적용';
+      for(const button of [cancel,save])button.style.cssText='border:1px solid #d5e4d3;border-radius:9px;padding:10px 17px;background:#f5f8f4;color:#263a2a;font-weight:600';
+      save.style.background='#dcefd9';
+      const close=()=>overlay.remove();
+      cancel.addEventListener('click',close);
+      overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
+      save.addEventListener('click',()=>{
+        const name=(select.value===NEW?input.value:select.value).trim().slice(0,40);
+        if(!name){input.focus();return}
+        layout.categories[a.id]=name;rememberGroup(name);saveLayout();close();render();
+      });
+      actionsRow.append(cancel,save);dialog.append(heading,select,input,actionsRow);overlay.appendChild(dialog);shadow.appendChild(overlay);
     };
     const moveLayout=(from,to,kind)=>{
       if(from===to)return;
